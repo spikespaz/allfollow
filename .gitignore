@@ -1,1 +1,9 @@
+# Cargo
 /target
+
+# Nix
+result
+result-man
+
+# VS Code
+.vscode/
