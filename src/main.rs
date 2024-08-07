@@ -1,6 +1,8 @@
 mod flake_lock;
 
-use flake_lock::FlakeLock;
+use std::collections::HashMap;
+
+use flake_lock::{FlakeLock, InputNodeRef};
 
 const SUPPORTED_LOCK_VERSION: u32 = 7;
 
@@ -20,5 +22,19 @@ fn main() {
         panic!("This program supports flake lock files of schema version {} while the flake you have asked to modify is of version {}", SUPPORTED_LOCK_VERSION, lock.version)
     }
 
-    dbg!(lock);
+    dbg!(&lock);
+
+    dbg!(
+        lock.get_input_by_ref(&InputNodeRef::Follows(Vec::from_iter([
+            "hyprcursor".to_owned(),
+            "hyprlang".to_owned(),
+            "systems".to_owned()
+        ])))
+    );
+
+    let mut new_lock = FlakeLock {
+        nodes: HashMap::new(),
+        root: lock.root.clone(),
+        version: SUPPORTED_LOCK_VERSION,
+    };
 }

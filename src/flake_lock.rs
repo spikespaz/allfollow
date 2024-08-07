@@ -75,6 +75,27 @@ pub enum FlakeRef {
     },
 }
 
+impl FlakeLock {
+    pub fn get_root_input(&self, name: impl AsRef<str>) -> Option<&InputNode> {
+        let root_inputs = self.nodes.get(&self.root)?.inputs.as_ref()?;
+        self.get_input_by_ref(root_inputs.get(name.as_ref())?)
+    }
+
+    pub fn get_input_by_ref(&self, r#ref: &InputNodeRef) -> Option<&InputNode> {
+        match r#ref {
+            InputNodeRef::Name(name) => self.nodes.get(name),
+            InputNodeRef::Follows(path) => {
+                let mut curr = self.get_root_input(path.first()?)?;
+                for name in path.iter().skip(1) {
+                    let r#ref = curr.inputs.as_ref()?.get(name)?;
+                    curr = self.get_input_by_ref(r#ref)?;
+                }
+                Some(curr)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::FlakeLock;
