@@ -93,21 +93,19 @@ pub enum FlakeReference {
 }
 
 impl LockFile {
-    // pub fn new() -> Self {
-    //     static ROOT: &str = "root";
-    //     Self {
-    //         nodes: HashMap::from_iter([(
-    //             ROOT.to_owned(),
-    //             InputNode {
-    //                 flake: true,
-    //                 inputs: Some(HashMap::new()),
-    //                 ..Default::default()
-    //             },
-    //         )]),
-    //         root: ROOT.to_owned(),
-    //         version: SUPPORTED_LOCK_VERSION,
-    //     }
-    // }
+    pub fn new() -> Self {
+        static ROOT: &str = "root";
+        Self {
+            nodes: HashMap::from_iter([(
+                ROOT.into(),
+                Node::Unlocked(UnlockedNode {
+                    inputs: HashMap::new(),
+                }),
+            )]),
+            root: ROOT.into(),
+            version: MAX_SUPPORTED_LOCK_VERSION,
+        }
+    }
 
     // pub fn root(&self) -> &InputNode {
     //     self.nodes
