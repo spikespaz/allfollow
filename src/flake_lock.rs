@@ -92,6 +92,30 @@ pub enum FlakeReference {
     },
 }
 
+impl NodeEdge {
+    pub fn from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+        Self::Follows(iter.into_iter().map(|s| s.as_ref().to_string()).collect())
+    }
+}
+
+impl From<&str> for NodeEdge {
+    fn from(value: &str) -> Self {
+        Self::Indexed(value.to_string())
+    }
+}
+
+impl From<String> for NodeEdge {
+    fn from(value: String) -> Self {
+        Self::Indexed(value)
+    }
+}
+
+impl From<Vec<String>> for NodeEdge {
+    fn from(value: Vec<String>) -> Self {
+        Self::Follows(value)
+    }
+}
+
 impl LockFile {
     pub fn new() -> Self {
         static ROOT: &str = "root";
