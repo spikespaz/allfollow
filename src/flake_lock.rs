@@ -153,6 +153,10 @@ impl LockFile {
             .expect("the root node to already exist")
     }
 
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
     // fn root_mut(&mut self) -> &mut InputNode {
     //     self.nodes
     //         .get_mut(&self.root)

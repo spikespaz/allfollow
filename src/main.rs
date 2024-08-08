@@ -3,7 +3,9 @@ mod flake_lock;
 use std::collections::HashMap;
 use std::ops::Deref;
 
-use flake_lock::{LockFile, LockedNode, NodeEdge, MAX_SUPPORTED_LOCK_VERSION};
+use flake_lock::{
+    LockFile, LockedNode, NodeEdge, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
+};
 
 fn main() {
     let input_lock = std::fs::read_to_string("./samples/hyprnix/before/flake.lock")
@@ -17,9 +19,16 @@ fn main() {
         }
     };
 
-    // if old_lock.version != MAX_SUPPORTED_LOCK_VERSION {
-    //     panic!("This program supports flake lock files of schema version {} while the flake you have asked to modify is of version {}", MAX_SUPPORTED_LOCK_VERSION, old_lock.version)
-    // }
+    if old_lock.version() < MIN_SUPPORTED_LOCK_VERSION
+        && old_lock.version() > MAX_SUPPORTED_LOCK_VERSION
+    {
+        panic!(
+            "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}",
+            MIN_SUPPORTED_LOCK_VERSION,
+            MAX_SUPPORTED_LOCK_VERSION,
+            old_lock.version()
+        );
+    }
 
     dbg!(old_lock.root().edges());
 
