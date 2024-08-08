@@ -1,16 +1,15 @@
 mod flake_lock;
 
 use std::collections::HashMap;
+use std::ops::Deref;
 
-use flake_lock::{FlakeLock, InputNodeRef};
-
-const SUPPORTED_LOCK_VERSION: u32 = 7;
+use flake_lock::{FlakeLock, InputNode, InputNodeRef, SUPPORTED_LOCK_VERSION};
 
 fn main() {
     let input_lock = std::fs::read_to_string("./samples/hyprnix/before/flake.lock")
         .expect("samples/a/flake.lock does not exist");
 
-    let lock: FlakeLock = {
+    let old_lock: FlakeLock = {
         let deser = &mut serde_json::Deserializer::from_str(&input_lock);
         match serde_path_to_error::deserialize(deser) {
             Ok(lock) => lock,
@@ -18,23 +17,18 @@ fn main() {
         }
     };
 
-    if lock.version != SUPPORTED_LOCK_VERSION {
-        panic!("This program supports flake lock files of schema version {} while the flake you have asked to modify is of version {}", SUPPORTED_LOCK_VERSION, lock.version)
+    if old_lock.version != SUPPORTED_LOCK_VERSION {
+        panic!("This program supports flake lock files of schema version {} while the flake you have asked to modify is of version {}", SUPPORTED_LOCK_VERSION, old_lock.version)
     }
 
-    dbg!(&lock);
+    dbg!(&old_lock);
 
-    dbg!(
-        lock.get_input_by_ref(&InputNodeRef::Follows(Vec::from_iter([
-            "hyprcursor".to_owned(),
-            "hyprlang".to_owned(),
-            "systems".to_owned()
-        ])))
-    );
+    let mut flake_inputs = old_lock.input_refs().clone();
+    let mut new_lock = FlakeLock::new();
 
-    let mut new_lock = FlakeLock {
-        nodes: HashMap::new(),
-        root: lock.root.clone(),
-        version: SUPPORTED_LOCK_VERSION,
-    };
+    for (name, r#ref) in &mut flake_inputs {
+        *r#ref = new_lock.copy_node_from(&old_lock, r#ref, name).unwrap();
+    }
+
+    println!("{}", serde_json::to_string_pretty(&new_lock).unwrap());
 }
