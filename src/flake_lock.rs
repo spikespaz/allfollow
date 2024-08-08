@@ -116,6 +116,22 @@ impl From<Vec<String>> for NodeEdge {
     }
 }
 
+impl Node {
+    pub fn edges(&self) -> HashMap<&str, &NodeEdge> {
+        match self {
+            Self::Unlocked(UnlockedNode { inputs })
+            | Self::Locked(LockedNode {
+                inputs: Some(inputs),
+                ..
+            }) => inputs
+                .iter()
+                .map(|(index, edge)| (index.as_str(), edge))
+                .collect(),
+            _ => HashMap::new(),
+        }
+    }
+}
+
 impl LockFile {
     pub fn new() -> Self {
         static ROOT: &str = "root";
@@ -131,30 +147,16 @@ impl LockFile {
         }
     }
 
-    // pub fn root(&self) -> &InputNode {
-    //     self.nodes
-    //         .get(&self.root)
-    //         .expect("the root node to already exist")
-    // }
+    pub fn root(&self) -> &Node {
+        self.nodes
+            .get(&self.root)
+            .expect("the root node to already exist")
+    }
 
     // fn root_mut(&mut self) -> &mut InputNode {
     //     self.nodes
     //         .get_mut(&self.root)
     //         .expect("the root node to already exist")
-    // }
-
-    // pub fn input_refs(&self) -> &HashMap<String, InputNodeRef> {
-    //     self.root()
-    //         .inputs
-    //         .as_ref()
-    //         .expect("the root node to have been initialized")
-    // }
-
-    // fn input_refs_mut(&mut self) -> &mut HashMap<String, InputNodeRef> {
-    //     self.root_mut()
-    //         .inputs
-    //         .as_mut()
-    //         .expect("the root node to have been initialized")
     // }
 
     // pub fn get_input_by_name(&self, name: impl AsRef<str>) -> Option<&InputNode> {

@@ -21,7 +21,7 @@ fn main() {
     //     panic!("This program supports flake lock files of schema version {} while the flake you have asked to modify is of version {}", MAX_SUPPORTED_LOCK_VERSION, old_lock.version)
     // }
 
-    dbg!(&old_lock);
+    dbg!(old_lock.root().edges());
 
     // let mut flake_inputs = old_lock.input_refs().clone();
     // let mut new_lock = FlakeLock::new();
