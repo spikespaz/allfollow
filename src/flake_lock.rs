@@ -42,8 +42,8 @@ pub struct UnlockedNode {
 pub struct LockedNode {
     #[serde(skip_serializing_if = "Clone::clone", default = "default_true")]
     flake: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    inputs: Option<HashMap<String, NodeEdge>>,
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
+    inputs: HashMap<String, NodeEdge>,
     locked: Box<LockedReference>,
     original: Box<FlakeReference>,
 }
@@ -118,17 +118,14 @@ impl From<Vec<String>> for NodeEdge {
 
 impl Node {
     pub fn edges(&self) -> HashMap<&str, &NodeEdge> {
-        match self {
-            Self::Unlocked(UnlockedNode { inputs })
-            | Self::Locked(LockedNode {
-                inputs: Some(inputs),
-                ..
-            }) => inputs
-                .iter()
-                .map(|(index, edge)| (index.as_str(), edge))
-                .collect(),
-            _ => HashMap::new(),
-        }
+        let inputs = match self {
+            Self::Unlocked(UnlockedNode { inputs }) => inputs,
+            Self::Locked(LockedNode { inputs, .. }) => inputs,
+        };
+        inputs
+            .iter()
+            .map(|(index, edge)| (index.as_str(), edge))
+            .collect()
     }
 }
 
