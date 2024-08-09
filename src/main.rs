@@ -34,6 +34,15 @@ fn main() {
         .root()
         .follow_path(&old_lock, ["hyprland", "aquamarine", "systems"]));
 
+    for (name, pair) in old_lock.root().iter_inputs(&old_lock) {
+        let Some((index, node)) = pair else {
+            panic!("root node has dangling input `{name}`");
+        };
+        println!(
+            "root node has input named `{name}`, which is found by the index `{index}`\n{node:?}"
+        );
+    }
+
     // let mut flake_inputs = old_lock.input_refs().clone();
     // let mut new_lock = FlakeLock::new();
 

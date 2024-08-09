@@ -136,6 +136,15 @@ impl Node {
             }
         })
     }
+
+    pub fn iter_inputs<'lock>(
+        &'lock self,
+        lock: &'lock LockFile,
+    ) -> impl Iterator<Item = (&str, Option<(&str, &Node)>)> {
+        self.edges()
+            .iter()
+            .map(|(name, edge)| (name.as_str(), lock.resolve_edge(edge)))
+    }
 }
 
 impl LockFile {
