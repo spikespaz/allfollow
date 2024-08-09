@@ -117,15 +117,11 @@ impl From<Vec<String>> for NodeEdge {
 }
 
 impl Node {
-    pub fn edges(&self) -> HashMap<&str, &NodeEdge> {
-        let inputs = match self {
+    pub fn edges(&self) -> &HashMap<String, NodeEdge> {
+        match self {
             Self::Unlocked(UnlockedNode { inputs }) => inputs,
             Self::Locked(LockedNode { inputs, .. }) => inputs,
-        };
-        inputs
-            .iter()
-            .map(|(index, edge)| (index.as_str(), edge))
-            .collect()
+        }
     }
 }
 
