@@ -167,6 +167,13 @@ impl LockFile {
         self.nodes.get(index.as_ref())
     }
 
+    pub fn resolve_edge<'lock>(&'lock self, edge: &'lock NodeEdge) -> Option<(&str, &Node)> {
+        match edge {
+            NodeEdge::Indexed(index) => Some((index.as_str(), self.nodes.get(index)?)),
+            NodeEdge::Follows(path) => self.root().follow_path(self, path),
+        }
+    }
+
     // fn root_mut(&mut self) -> &mut InputNode {
     //     self.nodes
     //         .get_mut(&self.root)
