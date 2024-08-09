@@ -176,18 +176,16 @@ impl LockFile {
         self.nodes.get(index.as_ref())
     }
 
+    pub fn get_node_mut(&mut self, index: impl AsRef<str>) -> Option<&mut Node> {
+        self.nodes.get_mut(index.as_ref())
+    }
+
     pub fn resolve_edge<'lock>(&'lock self, edge: &'lock NodeEdge) -> Option<(&str, &Node)> {
         match edge {
             NodeEdge::Indexed(index) => Some((index.as_str(), self.nodes.get(index)?)),
             NodeEdge::Follows(path) => self.root().follow_path(self, path),
         }
     }
-
-    // fn root_mut(&mut self) -> &mut InputNode {
-    //     self.nodes
-    //         .get_mut(&self.root)
-    //         .expect("the root node to already exist")
-    // }
 
     // pub fn insert_input(&mut self, name: &str, input: InputNode) -> InputNodeRef {
     //     let r#ref = self.insert_node(name, input);
