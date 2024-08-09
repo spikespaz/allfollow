@@ -123,6 +123,19 @@ impl Node {
             Self::Locked(LockedNode { inputs, .. }) => inputs,
         }
     }
+
+    pub fn follow_path<'lock>(
+        &'lock self,
+        lock: &'lock LockFile,
+        path: impl IntoIterator<Item = impl AsRef<str>>,
+    ) -> Option<(&str, &Node)> {
+        path.into_iter().try_fold(("", self), |(_, node), name| {
+            match node.edges().get(name.as_ref())? {
+                NodeEdge::Indexed(index) => Some((index.as_str(), lock.get_node(index)?)),
+                NodeEdge::Follows(path) => self.follow_path(lock, path),
+            }
+        })
+    }
 }
 
 impl LockFile {
@@ -150,30 +163,14 @@ impl LockFile {
         self.version
     }
 
+    pub fn get_node(&self, index: impl AsRef<str>) -> Option<&Node> {
+        self.nodes.get(index.as_ref())
+    }
+
     // fn root_mut(&mut self) -> &mut InputNode {
     //     self.nodes
     //         .get_mut(&self.root)
     //         .expect("the root node to already exist")
-    // }
-
-    // pub fn get_input_by_name(&self, name: impl AsRef<str>) -> Option<&InputNode> {
-    //     self.input_refs()
-    //         .get(name.as_ref())
-    //         .and_then(|r#ref| self.get_node_by_ref(r#ref))
-    // }
-
-    // pub fn get_node_by_ref(&self, r#ref: &InputNodeRef) -> Option<&InputNode> {
-    //     match r#ref {
-    //         InputNodeRef::Name(name) => self.nodes.get(name),
-    //         InputNodeRef::Follows(path) => {
-    //             let mut curr = self.get_input_by_name(path.first()?)?;
-    //             for name in path.iter().skip(1) {
-    //                 let r#ref = curr.inputs.as_ref()?.get(name)?;
-    //                 curr = self.get_node_by_ref(r#ref)?;
-    //             }
-    //             Some(curr)
-    //         }
-    //     }
     // }
 
     // pub fn insert_input(&mut self, name: &str, input: InputNode) -> InputNodeRef {

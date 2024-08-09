@@ -30,7 +30,9 @@ fn main() {
         );
     }
 
-    dbg!(old_lock.root().edges());
+    dbg!(old_lock
+        .root()
+        .follow_path(&old_lock, ["hyprland", "aquamarine", "systems"]));
 
     // let mut flake_inputs = old_lock.input_refs().clone();
     // let mut new_lock = FlakeLock::new();
