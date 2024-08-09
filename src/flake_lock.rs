@@ -1,3 +1,4 @@
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -12,7 +13,7 @@ fn default_true() -> bool {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LockFile {
-    nodes: HashMap<String, Node>,
+    nodes: HashMap<String, RefCell<Node>>,
     root: String,
     version: u32,
 }
@@ -34,7 +35,7 @@ pub enum Node {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UnlockedNode {
-    inputs: HashMap<String, NodeEdge>,
+    inputs: HashMap<String, RefCell<NodeEdge>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -43,7 +44,7 @@ pub struct LockedNode {
     #[serde(skip_serializing_if = "Clone::clone", default = "default_true")]
     flake: bool,
     #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    inputs: HashMap<String, NodeEdge>,
+    inputs: HashMap<String, RefCell<NodeEdge>>,
     locked: Box<LockedReference>,
     original: Box<FlakeReference>,
 }
@@ -117,34 +118,31 @@ impl From<Vec<String>> for NodeEdge {
 }
 
 impl Node {
-    pub fn edges(&self) -> &HashMap<String, NodeEdge> {
+    pub fn edges(&self) -> &HashMap<String, RefCell<NodeEdge>> {
         match self {
             Self::Unlocked(UnlockedNode { inputs }) => inputs,
             Self::Locked(LockedNode { inputs, .. }) => inputs,
         }
     }
 
-    pub fn follow_path<'lock>(
-        &'lock self,
-        lock: &'lock LockFile,
-        path: impl IntoIterator<Item = impl AsRef<str>>,
-    ) -> Option<(&str, &Node)> {
-        path.into_iter().try_fold(("", self), |(_, node), name| {
-            match node.edges().get(name.as_ref())? {
-                NodeEdge::Indexed(index) => Some((index.as_str(), lock.get_node(index)?)),
-                NodeEdge::Follows(path) => self.follow_path(lock, path),
-            }
-        })
+    pub fn get_edge(&self, name: impl AsRef<str>) -> Option<Ref<NodeEdge>> {
+        self.edges().get(name.as_ref()).map(|cell| cell.borrow())
     }
 
-    pub fn iter_inputs<'lock>(
-        &'lock self,
-        lock: &'lock LockFile,
-    ) -> impl Iterator<Item = (&str, Option<(&str, &Node)>)> {
+    pub fn get_edge_mut(&self, name: impl AsRef<str>) -> Option<RefMut<NodeEdge>> {
         self.edges()
-            .iter()
-            .map(|(name, edge)| (name.as_str(), lock.resolve_edge(edge)))
+            .get(name.as_ref())
+            .map(|cell| cell.borrow_mut())
     }
+
+    // pub fn iter_inputs<'lock>(
+    //     &'lock self,
+    //     lock: &'lock LockFile,
+    // ) -> impl Iterator<Item = (&str, Option<(&str, Ref<Node>)>)> {
+    //     self.edges()
+    //         .iter()
+    //         .map(|(name, edge)| (name.as_str(), lock.resolve_edge(edge)))
+    // }
 }
 
 impl LockFile {
@@ -153,76 +151,46 @@ impl LockFile {
         Self {
             nodes: HashMap::from_iter([(
                 ROOT.into(),
-                Node::Unlocked(UnlockedNode {
+                RefCell::new(Node::Unlocked(UnlockedNode {
                     inputs: HashMap::new(),
-                }),
+                })),
             )]),
             root: ROOT.into(),
             version: MAX_SUPPORTED_LOCK_VERSION,
         }
     }
 
-    pub fn root(&self) -> &Node {
+    pub fn root(&self) -> Ref<Node> {
         self.nodes
             .get(&self.root)
             .expect("the root node to already exist")
+            .borrow()
     }
 
     pub fn version(&self) -> u32 {
         self.version
     }
 
-    pub fn get_node(&self, index: impl AsRef<str>) -> Option<&Node> {
-        self.nodes.get(index.as_ref())
+    pub fn get_node(&self, index: impl AsRef<str>) -> Option<Ref<Node>> {
+        self.nodes.get(index.as_ref()).map(RefCell::borrow)
     }
 
-    pub fn get_node_mut(&mut self, index: impl AsRef<str>) -> Option<&mut Node> {
-        self.nodes.get_mut(index.as_ref())
+    pub fn get_node_mut(&self, index: impl AsRef<str>) -> Option<RefMut<Node>> {
+        self.nodes.get(index.as_ref()).map(RefCell::borrow_mut)
     }
 
-    pub fn resolve_edge<'lock>(&'lock self, edge: &'lock NodeEdge) -> Option<(&str, &Node)> {
+    pub fn resolve_edge(&self, edge: &NodeEdge) -> Option<String> {
         match edge {
-            NodeEdge::Indexed(index) => Some((index.as_str(), self.nodes.get(index)?)),
-            NodeEdge::Follows(path) => self.root().follow_path(self, path),
+            NodeEdge::Indexed(index) => Some(index.to_owned()),
+            NodeEdge::Follows(path) => self.follow_path(path),
         }
     }
 
-    // pub fn insert_input(&mut self, name: &str, input: InputNode) -> InputNodeRef {
-    //     let r#ref = self.insert_node(name, input);
-    //     self.input_refs_mut()
-    //         .insert(name.to_owned(), r#ref.clone())
-    //         .unwrap();
-    //     r#ref
-    // }
-
-    // pub fn insert_node(&mut self, name: &str, input: InputNode) -> InputNodeRef {
-    //     let name = {
-    //         let mut i = 1;
-    //         let mut new_name = name.to_owned();
-    //         while self.nodes.contains_key(&new_name) {
-    //             i += 1;
-    //             new_name = format!("{name}_{i}");
-    //         }
-    //         new_name
-    //     };
-    //     self.nodes.insert(name.clone(), input);
-    //     InputNodeRef::Name(name)
-    // }
-
-    // pub fn copy_node_from(
-    //     &mut self,
-    //     other: &Self,
-    //     r#ref: &InputNodeRef,
-    //     name_base: impl AsRef<str>,
-    // ) -> Result<InputNodeRef, ()> {
-    //     let mut node = other.get_node_by_ref(r#ref).ok_or(())?.clone();
-    //     if let Some(inputs) = &mut node.inputs {
-    //         for (input_name, input_ref) in inputs {
-    //             *input_ref = self.copy_node_from(other, input_ref, input_name)?;
-    //         }
-    //     }
-    //     Ok(self.insert_node(name_base.as_ref(), node))
-    // }
+    pub fn follow_path(&self, path: impl IntoIterator<Item = impl AsRef<str>>) -> Option<String> {
+        path.into_iter().try_fold(self.root.clone(), |index, name| {
+            self.resolve_edge(&*self.get_node(index)?.get_edge(name)?)
+        })
+    }
 }
 
 // #[cfg(test)]
