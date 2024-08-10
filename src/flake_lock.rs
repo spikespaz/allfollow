@@ -213,6 +213,10 @@ impl LockFile {
         self.version
     }
 
+    pub fn node_indices(&self) -> impl Iterator<Item = &str> {
+        self.nodes.keys().map(String::as_str)
+    }
+
     pub fn get_node(&self, index: impl AsRef<str>) -> Option<Ref<Node>> {
         self.nodes.get(index.as_ref()).map(RefCell::borrow)
     }
