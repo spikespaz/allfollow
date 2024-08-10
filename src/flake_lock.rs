@@ -97,6 +97,36 @@ impl NodeEdge {
     pub fn from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         Self::Follows(iter.into_iter().map(|s| s.as_ref().to_string()).collect())
     }
+
+    pub fn index(&self) -> Option<&str> {
+        match self {
+            Self::Indexed(index) => Some(index.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn path(&self) -> Option<&Vec<String>> {
+        match self {
+            Self::Follows(path) => Some(path),
+            _ => None,
+        }
+    }
+}
+
+pub trait NodeEdgeRef<'a> {
+    fn index(self) -> Option<Ref<'a, str>>;
+
+    fn path(self) -> Option<Ref<'a, Vec<String>>>;
+}
+
+impl<'a> NodeEdgeRef<'a> for Ref<'a, NodeEdge> {
+    fn index(self) -> Option<Ref<'a, str>> {
+        Ref::filter_map(self, NodeEdge::index).ok()
+    }
+
+    fn path(self) -> Option<Ref<'a, Vec<String>>> {
+        Ref::filter_map(self, NodeEdge::path).ok()
+    }
 }
 
 impl From<&str> for NodeEdge {
