@@ -1,8 +1,6 @@
 mod flake_lock;
 
-use flake_lock::{LockFile, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION};
-
-use self::flake_lock::NodeEdge;
+use flake_lock::{LockFile, NodeEdgeRef, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION};
 
 fn main() {
     let file_content = std::fs::read_to_string("./samples/hyprnix/before/flake.lock")
@@ -27,16 +25,12 @@ fn main() {
 
     let root = lock.root();
 
-    for (_, edge) in root.iter_edges() {
-        let NodeEdge::Indexed(index) = &*edge else {
-            continue;
-        };
-        let input = &*lock.get_node(index).unwrap();
+    for index in root.iter_edges().filter_map(|(_, edge)| edge.index()) {
+        let input = &*lock.get_node(&*index).unwrap();
         for (name, mut edge) in input.iter_edges_mut() {
-            let Some(root_edge) = root.get_edge(name) else {
-                continue;
-            };
-            *edge = (*root_edge).clone();
+            if let Some(root_edge) = root.get_edge(name) {
+                *edge = (*root_edge).clone();
+            }
         }
     }
 }
