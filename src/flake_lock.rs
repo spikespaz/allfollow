@@ -118,7 +118,7 @@ impl From<Vec<String>> for NodeEdge {
 }
 
 impl Node {
-    pub fn edges(&self) -> &HashMap<String, RefCell<NodeEdge>> {
+    fn edges(&self) -> &HashMap<String, RefCell<NodeEdge>> {
         match self {
             Self::Unlocked(UnlockedNode { inputs }) => inputs,
             Self::Locked(LockedNode { inputs, .. }) => inputs,
