@@ -125,6 +125,18 @@ impl Node {
         }
     }
 
+    pub fn iter_edges(&self) -> impl Iterator<Item = (&str, Ref<NodeEdge>)> {
+        self.edges()
+            .iter()
+            .map(|(name, edge)| (name.as_str(), edge.borrow()))
+    }
+
+    pub fn iter_edges_mut(&self) -> impl Iterator<Item = (&str, RefMut<NodeEdge>)> {
+        self.edges()
+            .iter()
+            .map(|(name, edge)| (name.as_str(), edge.borrow_mut()))
+    }
+
     pub fn get_edge(&self, name: impl AsRef<str>) -> Option<Ref<NodeEdge>> {
         self.edges().get(name.as_ref()).map(|cell| cell.borrow())
     }
