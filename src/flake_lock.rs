@@ -202,11 +202,8 @@ impl LockFile {
         }
     }
 
-    pub fn root(&self) -> Ref<Node> {
-        self.nodes
-            .get(&self.root)
-            .expect("the root node to already exist")
-            .borrow()
+    pub fn root(&self) -> Option<Ref<Node>> {
+        self.nodes.get(&self.root).map(RefCell::borrow)
     }
 
     pub fn root_index(&self) -> &str {

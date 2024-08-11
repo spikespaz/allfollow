@@ -33,7 +33,7 @@ fn main() {
         );
     }
 
-    let root = lock.root();
+    let root = lock.root().unwrap();
 
     for index in root.iter_edges().filter_map(|(_, edge)| edge.index()) {
         let input = &*lock.get_node(&*index).unwrap();
