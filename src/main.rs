@@ -1,6 +1,11 @@
 mod flake_lock;
 
-use flake_lock::{LockFile, NodeEdgeRef, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION};
+use std::collections::HashMap;
+use std::iter::repeat;
+
+use flake_lock::{
+    LockFile, Node, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
+};
 
 fn main() {
     let file_content = std::fs::read_to_string("./samples/hyprnix/before/flake.lock")
@@ -23,7 +28,7 @@ fn main() {
         );
     }
 
-    let root = lock.root();
+    let root = &*lock.root();
 
     for index in root.iter_edges().filter_map(|(_, edge)| edge.index()) {
         let input = &*lock.get_node(&*index).unwrap();
@@ -33,4 +38,21 @@ fn main() {
             }
         }
     }
+
+    fn recurse_inputs(lock: &LockFile, node: &Node, op: &mut impl FnMut(String)) {
+        for (_, edge) in node.iter_edges() {
+            let index = lock.resolve_edge(&edge).unwrap();
+            let next_node = &*lock.get_node(&index).unwrap();
+            op(index);
+            recurse_inputs(lock, next_node, op);
+        }
+    }
+
+    let mut node_hits = HashMap::<_, _>::from_iter(lock.node_indices().zip(repeat(0_u32)));
+    recurse_inputs(&lock, root, &mut |index| {
+        *node_hits.get_mut(index.as_str()).unwrap() += 1;
+    });
+
+    println!("{}", serde_json::to_string(&lock).unwrap());
+    println!("{:#?}", node_hits);
 }
