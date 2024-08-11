@@ -229,6 +229,12 @@ impl LockFile {
         self.nodes.get(index.as_ref()).map(RefCell::borrow_mut)
     }
 
+    pub fn remove_node(&mut self, index: impl AsRef<str>) -> Option<Node> {
+        self.nodes
+            .remove(index.as_ref())
+            .map(|cell| cell.into_inner())
+    }
+
     pub fn resolve_edge(&self, edge: &NodeEdge) -> Option<String> {
         match edge {
             NodeEdge::Indexed(index) => Some(index.to_owned()),
