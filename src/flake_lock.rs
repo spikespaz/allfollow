@@ -209,6 +209,10 @@ impl LockFile {
             .borrow()
     }
 
+    pub fn root_index(&self) -> &str {
+        &self.root
+    }
+
     pub fn version(&self) -> u32 {
         self.version
     }
