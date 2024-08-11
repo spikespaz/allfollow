@@ -39,18 +39,17 @@ fn main() {
         }
     }
 
-    fn recurse_inputs(lock: &LockFile, node: &Node, op: &mut impl FnMut(String)) {
-        for (_, edge) in node.iter_edges() {
+    fn recurse_inputs(lock: &LockFile, index: impl AsRef<str>, op: &mut impl FnMut(&str)) {
+        op(index.as_ref());
+        for (_, edge) in lock.get_node(index).unwrap().iter_edges() {
             let index = lock.resolve_edge(&edge).unwrap();
-            let next_node = &*lock.get_node(&index).unwrap();
-            op(index);
-            recurse_inputs(lock, next_node, op);
+            recurse_inputs(lock, index, op);
         }
     }
 
     let mut node_hits = HashMap::<_, _>::from_iter(lock.node_indices().zip(repeat(0_u32)));
-    recurse_inputs(&lock, root, &mut |index| {
-        *node_hits.get_mut(index.as_str()).unwrap() += 1;
+    recurse_inputs(&lock, lock.root_index(), &mut |index| {
+        *node_hits.get_mut(index).unwrap() += 1;
     });
 
     println!("{}", serde_json::to_string(&lock).unwrap());
