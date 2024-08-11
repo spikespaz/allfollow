@@ -94,10 +94,6 @@ pub enum FlakeReference {
 }
 
 impl NodeEdge {
-    pub fn from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
-        Self::Follows(iter.into_iter().map(|s| s.as_ref().to_string()).collect())
-    }
-
     pub fn index(&self) -> Option<&str> {
         match self {
             Self::Indexed(index) => Some(index.as_str()),
@@ -144,6 +140,15 @@ impl From<String> for NodeEdge {
 impl From<Vec<String>> for NodeEdge {
     fn from(value: Vec<String>) -> Self {
         Self::Follows(value)
+    }
+}
+
+impl<A> FromIterator<A> for NodeEdge
+where
+    A: AsRef<str>,
+{
+    fn from_iter<T: IntoIterator<Item = A>>(iter: T) -> Self {
+        Self::Follows(iter.into_iter().map(|s| s.as_ref().to_string()).collect())
     }
 }
 
