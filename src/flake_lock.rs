@@ -11,7 +11,7 @@ fn default_true() -> bool {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LockFile {
     nodes: HashMap<String, RefCell<Node>>,
     root: String,
@@ -19,21 +19,21 @@ pub struct LockFile {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(deny_unknown_fields, untagged)]
 pub enum NodeEdge {
     Indexed(String),
     Follows(Vec<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[serde(deny_unknown_fields, untagged)]
 pub enum Node {
     Locked(LockedNode),
     Unlocked(UnlockedNode),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LockedNode {
     #[serde(skip_serializing_if = "Clone::clone", default = "default_true")]
     flake: bool,
@@ -44,22 +44,25 @@ pub struct LockedNode {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UnlockedNode {
     inputs: HashMap<String, RefCell<NodeEdge>>,
 }
-
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LockedReference {
     last_modified: usize,
     nar_hash: String,
-    #[serde(flatten)]
+    #[serde(flatten)] // do not use deny_unknown_fields
     flake_ref: FlakeReference,
 }
+// Supposedly using `deny_unknown_fields` here is illegal when the outer
+// `LockedReference` flattens into `flake_ref`.
+// I have tested it a bit, and it seems to work, and catch errors.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(
+    deny_unknown_fields,
     tag = "type",
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
