@@ -1,27 +1,69 @@
+mod cli_args;
 mod flake_lock;
 
 use std::collections::HashMap;
 use std::iter::repeat;
 
+use argh::FromArgs;
+use cli_args::{Input, Output};
 use flake_lock::{
     LockFile, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
 };
 
-fn recurse_inputs(lock: &LockFile, index: impl AsRef<str>, op: &mut impl FnMut(&str)) {
-    op(index.as_ref());
-    for (_, edge) in lock.get_node(index).unwrap().iter_edges() {
-        let index = lock.resolve_edge(&edge).unwrap();
-        recurse_inputs(lock, index, op);
+#[derive(FromArgs)]
+#[argh(
+    description = "Automatically redirect top-level flake inputs' edges to follow all other identically named top-level inputs."
+)]
+struct Args {
+    #[argh(
+        positional,
+        default = r#"Input::from("./flake.lock")"#,
+        description = "path of the flake lock to read, set to `-` to read from stdin"
+    )]
+    pub lock_file: Input,
+    #[argh(
+        switch,
+        short = 'i',
+        description = "set the output path to the same as the original lock and overwrite with no confirmation"
+    )]
+    pub in_place: bool,
+    #[argh(
+        option,
+        short = 'o',
+        default = r#"Output::Stdout"#,
+        description = "path of the output file, set to `-` to print to stdout (default)"
+    )]
+    pub output: Output,
+    #[argh(
+        switch,
+        short = 'f',
+        description = "overwrite the output file if it already exists"
+    )]
+    pub overwrite: bool,
+}
+
+impl Args {
+    fn from_env() -> Self {
+        let mut args = argh::from_env::<Args>();
+        if args.in_place {
+            args.output = Output::from(args.lock_file.clone());
+            args.overwrite = true;
+        }
+        args
     }
 }
 
 fn main() {
-    let file_content = std::fs::read_to_string("./samples/hyprnix/before/flake.lock")
-        .expect("samples/a/flake.lock does not exist");
+    let args = Args::from_env();
 
+    let reader = args
+        .lock_file
+        .open()
+        .unwrap_or_else(|e| panic!("Failed to read the input file: {e}"));
+    let deserializer = &mut serde_json::Deserializer::from_reader(reader);
     let lock: LockFile = {
-        let deserializer = &mut serde_json::Deserializer::from_str(&file_content);
-        serde_path_to_error::deserialize(deserializer).unwrap_or_else(|e| panic!("{}", e))
+        serde_path_to_error::deserialize(deserializer)
+            .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
     };
 
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
@@ -62,5 +104,24 @@ fn main() {
         lock.remove_node(index);
     }
 
-    println!("{}", serde_json::to_string(&lock).unwrap());
+    let writer = args
+        .output
+        .create(!args.overwrite)
+        .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
+
+    serde_json::to_writer_pretty(writer, &lock).unwrap_or_else(|e| {
+        if e.is_io() {
+            panic!("Could not write to output: {e}")
+        } else {
+            unreachable!()
+        }
+    });
+}
+
+fn recurse_inputs(lock: &LockFile, index: impl AsRef<str>, op: &mut impl FnMut(&str)) {
+    op(index.as_ref());
+    for (_, edge) in lock.get_node(index).unwrap().iter_edges() {
+        let index = lock.resolve_edge(&edge).unwrap();
+        recurse_inputs(lock, index, op);
+    }
 }
