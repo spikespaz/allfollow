@@ -9,6 +9,8 @@ use cli_args::{Input, Output};
 use flake_lock::{
     LockFile, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
 };
+use serde::Serialize;
+use serde_json::Serializer;
 
 #[derive(FromArgs)]
 #[argh(
@@ -40,6 +42,8 @@ struct Args {
         description = "overwrite the output file if it already exists"
     )]
     pub overwrite: bool,
+    #[argh(switch, short = 'p', description = "serialize pretty output")]
+    pub pretty: bool,
 }
 
 impl Args {
@@ -68,7 +72,7 @@ fn main() {
 
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
         panic!(
-            "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}",
+            "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}.",
             MIN_SUPPORTED_LOCK_VERSION,
             MAX_SUPPORTED_LOCK_VERSION,
             lock.version()
@@ -109,13 +113,15 @@ fn main() {
         .create(!args.overwrite)
         .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
 
-    serde_json::to_writer_pretty(writer, &lock).unwrap_or_else(|e| {
-        if e.is_io() {
-            panic!("Could not write to output: {e}")
-        } else {
-            unreachable!()
-        }
-    });
+    let res = if args.pretty {
+        lock.serialize(&mut Serializer::pretty(writer))
+    } else {
+        lock.serialize(&mut Serializer::new(writer))
+    };
+
+    if let Err(e) = res {
+        panic!("Failed while serializing to output, file is probably corrupt: {e}")
+    }
 }
 
 fn recurse_inputs(lock: &LockFile, index: impl AsRef<str>, op: &mut impl FnMut(&str)) {
