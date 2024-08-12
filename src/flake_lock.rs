@@ -91,6 +91,8 @@ pub enum FlakeReference {
         rev: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none", default)]
         dir: Option<String>,
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        submodules: bool,
     },
 }
 
