@@ -7,7 +7,7 @@ use std::iter::repeat;
 use argh::FromArgs;
 use cli_args::{Input, Output};
 use flake_lock::{
-    LockFile, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
+    LockFile, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
 };
 use serde::Serialize;
 use serde_json::Serializer;
@@ -44,6 +44,11 @@ struct Args {
     pub overwrite: bool,
     #[argh(switch, short = 'p', description = "serialize pretty output")]
     pub pretty: bool,
+    #[argh(
+        switch,
+        description = "do not imitate follows paths and instead directly reference nodes by index"
+    )]
+    pub no_follows: bool,
 }
 
 impl Args {
@@ -70,6 +75,8 @@ fn main() {
             .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
     };
 
+    dbg!(&lock);
+
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
         panic!(
             "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}.",
@@ -84,8 +91,10 @@ fn main() {
     for index in root.iter_edges().filter_map(|(_, edge)| edge.index()) {
         let input = &*lock.get_node(&*index).unwrap();
         for (name, mut edge) in input.iter_edges_mut() {
-            if let Some(root_edge) = root.get_edge(name) {
-                *edge = (*root_edge).clone();
+            match (args.no_follows, root.get_edge(name)) {
+                (true, Some(root_edge)) => *edge = (*root_edge).clone(),
+                (false, Some(_)) => *edge = NodeEdge::from_iter([name]),
+                _ => (),
             }
         }
     }
