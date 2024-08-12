@@ -28,14 +28,8 @@ pub enum NodeEdge {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Node {
-    Unlocked(UnlockedNode),
     Locked(LockedNode),
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-pub struct UnlockedNode {
-    inputs: HashMap<String, RefCell<NodeEdge>>,
+    Unlocked(UnlockedNode),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -48,6 +42,13 @@ pub struct LockedNode {
     locked: Box<LockedReference>,
     original: Box<FlakeReference>,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UnlockedNode {
+    inputs: HashMap<String, RefCell<NodeEdge>>,
+}
+
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,8 +156,8 @@ where
 impl Node {
     fn edges(&self) -> &HashMap<String, RefCell<NodeEdge>> {
         match self {
-            Self::Unlocked(UnlockedNode { inputs }) => inputs,
             Self::Locked(LockedNode { inputs, .. }) => inputs,
+            Self::Unlocked(UnlockedNode { inputs }) => inputs,
         }
     }
 
