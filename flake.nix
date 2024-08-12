@@ -17,6 +17,22 @@
           overlays = [ rust-overlay.overlays.default ];
         });
     in {
+      packages = eachSystem (system:
+        let
+          pkgs = pkgsFor.${system};
+          rust-stable = pkgs.rust-bin.stable.latest.minimal;
+          rustPlatform = pkgs.makeRustPlatform {
+            cargo = rust-stable;
+            rustc = rust-stable;
+          };
+        in {
+          default = self.packages.${system}.allfollow;
+          allfollow = pkgs.callPackage ./nix/default.nix {
+            supportedPlatforms = import systems;
+            inherit rustPlatform;
+          };
+        });
+
       devShells = eachSystem (system:
         let
           pkgs = pkgsFor.${system};
