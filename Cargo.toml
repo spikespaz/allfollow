@@ -1,7 +1,20 @@
 [package]
 name = "allfollow"
+description = "A CLI tool to deduplicate your Nix flake's inputs as if you added follows everywhere."
+repository = "https://github.com/spikespaz/allfollow"
+homepage = "https://github.com/spikespaz/allfollow"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+keywords = ["nix", "flake", "lock"]
+categories = [
+    "command-line-utilities",
+    "development-tools",
+    "data-structures",
+    "algorithms",
+]
+
+publish = false
 
 [dependencies]
 argh = "0.1.12"
