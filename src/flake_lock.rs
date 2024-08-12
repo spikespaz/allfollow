@@ -252,27 +252,63 @@ impl LockFile {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::FlakeLock;
+#[cfg(test)]
+mod tests {
+    use super::Node;
 
-//     macro_rules! parse_lock_file {
-//         ($test_ident:ident, $lock_file_path:literal) => {
-//             #[test]
-//             fn $test_ident() {
-//                 static SOURCE: &str = include_str!($lock_file_path);
-//                 let deser = &mut serde_json::Deserializer::from_str(SOURCE);
-//                 let res: Result<FlakeLock, _> = serde_path_to_error::deserialize(deser);
-//                 match res {
-//                     Ok(lock) => {
-//                         dbg!(lock);
-//                     }
-//                     Err(e) => panic!("{}", e),
-//                 }
-//             }
-//         };
-//     }
+    #[test]
+    fn parse_node() {
+        let aquamarine_json = serde_json::json!(
+            {
+                "inputs": {
+                    "hyprutils": [
+                        "hyprutils"
+                    ],
+                    "hyprwayland-scanner": [
+                        "hyprwayland-scanner"
+                    ],
+                    "nixpkgs": [
+                        "nixpkgs"
+                    ],
+                    "systems": [
+                        "systems"
+                    ]
+                },
+                "locked": {
+                    "lastModified": 1722974790,
+                    "narHash": "sha256-zBZ9BvKF8pMF0ywcn1BI0+ntM1R0N8nysUmMDGmi0ts=",
+                    "owner": "hyprwm",
+                    "repo": "aquamarine",
+                    "rev": "131ed05f99e66c3e518be3fadeff7ddb7d1d351d",
+                    "type": "github"
+                },
+                "original": {
+                    "owner": "hyprwm",
+                    "repo": "aquamarine",
+                    "type": "github"
+                }
+            }
+        );
+        dbg!(serde_json::from_value::<Node>(aquamarine_json).unwrap());
+    }
 
-//     parse_lock_file!(parse_hyprnix_before, "../samples/hyprnix/before/flake.lock");
-//     parse_lock_file!(parse_hyprnix_after, "../samples/hyprnix/after/flake.lock");
-// }
+    //     macro_rules! parse_lock_file {
+    //         ($test_ident:ident, $lock_file_path:literal) => {
+    //             #[test]
+    //             fn $test_ident() {
+    //                 static SOURCE: &str = include_str!($lock_file_path);
+    //                 let deser = &mut serde_json::Deserializer::from_str(SOURCE);
+    //                 let res: Result<FlakeLock, _> = serde_path_to_error::deserialize(deser);
+    //                 match res {
+    //                     Ok(lock) => {
+    //                         dbg!(lock);
+    //                     }
+    //                     Err(e) => panic!("{}", e),
+    //                 }
+    //             }
+    //         };
+    //     }
+
+    //     parse_lock_file!(parse_hyprnix_before, "../samples/hyprnix/before/flake.lock");
+    //     parse_lock_file!(parse_hyprnix_after, "../samples/hyprnix/after/flake.lock");
+}
