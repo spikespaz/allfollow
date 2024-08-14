@@ -4,7 +4,7 @@ mod flake_lock;
 use std::collections::HashMap;
 use std::iter::repeat;
 
-use argh::FromArgs;
+use bpaf::Bpaf;
 use cli_args::{Input, Output};
 use flake_lock::{
     LockFile, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
@@ -12,48 +12,33 @@ use flake_lock::{
 use serde::Serialize;
 use serde_json::Serializer;
 
-#[derive(FromArgs)]
-#[argh(
-    description = "Automatically redirect top-level flake inputs' edges to follow all other identically named top-level inputs."
-)]
-struct Args {
-    #[argh(
-        positional,
-        default = r#"Input::from("./flake.lock")"#,
-        description = "path of the flake lock to read, set to `-` to read from stdin"
-    )]
-    pub lock_file: Input,
-    #[argh(
-        switch,
-        short = 'i',
-        description = "set the output path to the same as the original lock and overwrite with no confirmation"
-    )]
+/// Automatically redirect top-level flake inputs' edges to follow all other identically named top-level inputs.
+#[derive(Debug, Clone, Bpaf)]
+#[bpaf(options, generate(parse_env_args))]
+struct EnvArgs {
+    /// Write new lock file back to the source
+    #[bpaf(short('i'), long)]
     pub in_place: bool,
-    #[argh(
-        option,
-        short = 'o',
-        default = r#"Output::Stdout"#,
-        description = "path of the output file, set to `-` to print to stdout (default)"
-    )]
-    pub output: Output,
-    #[argh(
-        switch,
-        short = 'f',
-        description = "overwrite the output file if it already exists"
-    )]
+    /// Overwrite the output file if it exists
+    #[bpaf(short('O'), long)]
     pub overwrite: bool,
-    #[argh(switch, short = 'p', description = "serialize pretty output")]
+    /// Do not minify the output JSON
+    #[bpaf(short('p'), long)]
     pub pretty: bool,
-    #[argh(
-        switch,
-        description = "do not imitate follows paths and instead directly reference nodes by index"
-    )]
+    /// Do not imitate `inputs.*.follows`, reference node indices instead
+    #[bpaf(long, long("indexed"))]
     pub no_follows: bool,
+    /// Path of the new lock file to write, set to `-` for stdout
+    #[bpaf(short('o'), long, argument("FILE"))]
+    pub output: Output,
+    /// Path of flake lock to read, set to `-` to read from stdin
+    #[bpaf(positional("FILE"))]
+    pub lock_file: Input,
 }
 
-impl Args {
+impl EnvArgs {
     fn from_env() -> Self {
-        let mut args = argh::from_env::<Args>();
+        let mut args = parse_env_args().run();
         if args.in_place {
             args.output = Output::from(args.lock_file.clone());
             args.overwrite = true;
@@ -63,7 +48,7 @@ impl Args {
 }
 
 fn main() {
-    let args = Args::from_env();
+    let args = EnvArgs::from_env();
 
     let reader = args
         .lock_file

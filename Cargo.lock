@@ -6,41 +6,30 @@ version = 3
 name = "allfollow"
 version = "0.1.0"
 dependencies = [
- "argh",
+ "bpaf",
  "serde",
  "serde_json",
  "serde_path_to_error",
 ]
 
 [[package]]
-name = "argh"
-version = "0.1.12"
+name = "bpaf"
+version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7af5ba06967ff7214ce4c7419c7d185be7ecd6cc4965a8f6e1d8ce0398aad219"
+checksum = "3280efcf6d66bc77c2cf9b67dc8acee47a217d9be67dd590b3230dffe663724d"
 dependencies = [
- "argh_derive",
- "argh_shared",
+ "bpaf_derive",
 ]
 
 [[package]]
-name = "argh_derive"
-version = "0.1.12"
+name = "bpaf_derive"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56df0aeedf6b7a2fc67d06db35b09684c3e8da0c95f8f27685cb17e08413d87a"
+checksum = "9a8d5b11f7fa1068e5bbac8ab6c8c2c6940047f69185987446b60c995d4bf89c"
 dependencies = [
- "argh_shared",
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "argh_shared"
-version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5693f39141bda5760ecc4111ab08da40565d1771038c4a0250f03457ec707531"
-dependencies = [
- "serde",
 ]
 
 [[package]]
