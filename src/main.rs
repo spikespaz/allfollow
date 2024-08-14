@@ -12,15 +12,19 @@ use flake_lock::{
 use serde::Serialize;
 use serde_json::Serializer;
 
-/// Automatically redirect top-level flake inputs' edges to follow all other identically named top-level inputs.
+/// Imitate Nix flake input following behavior as a post-process,
+/// so that you can stop manually maintaining tedious connections
+/// between many flake inputs.
+/// This small tool aims to replace every instance of
+/// `inputs.*.inputs.*.follows = "*";` in your `flake.nix` with automation.
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options, generate(parse_env_args))]
 struct EnvArgs {
     /// Write new lock file back to the source
-    #[bpaf(short('i'), long)]
+    #[bpaf(short('I'), long)]
     pub in_place: bool,
     /// Overwrite the output file if it exists
-    #[bpaf(short('O'), long)]
+    #[bpaf(short('f'), long, long("force"))]
     pub overwrite: bool,
     /// Do not minify the output JSON
     #[bpaf(short('p'), long)]
@@ -28,11 +32,18 @@ struct EnvArgs {
     /// Do not imitate `inputs.*.follows`, reference node indices instead
     #[bpaf(long, long("indexed"))]
     pub no_follows: bool,
-    /// Path of the new lock file to write, set to `-` for stdout
-    #[bpaf(short('o'), long, argument("FILE"))]
+    /// Path of the new lock file to write, set to `-` for stdout (default)
+    #[bpaf(
+        short('o'),
+        long,
+        optional,
+        argument("OUTPUT"),
+        map(Option::unwrap_or_default)
+    )]
     pub output: Output,
-    /// Path of flake lock to read, set to `-` to read from stdin
-    #[bpaf(positional("FILE"))]
+    /// The path of `flake.lock` to read, or `-` to read from standard input.
+    /// If unspecified, defaults to the current directory.
+    #[bpaf(positional("INPUT"), optional, map(|arg| arg.unwrap_or(Input::from("./flake.lock"))))]
     pub lock_file: Input,
 }
 
@@ -59,8 +70,6 @@ fn main() {
         serde_path_to_error::deserialize(deserializer)
             .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
     };
-
-    dbg!(&lock);
 
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
         panic!(
