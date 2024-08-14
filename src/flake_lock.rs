@@ -82,6 +82,8 @@ pub enum FlakeReference {
         r#ref: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none", default)]
         rev: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        rev_count: Option<u32>,
         #[serde(skip_serializing_if = "std::ops::Not::not", default)]
         submodules: bool,
     },
@@ -259,10 +261,12 @@ impl LockFile {
 
 #[cfg(test)]
 mod tests {
+    use crate::flake_lock::LockedNode;
+
     use super::Node;
 
     #[test]
-    fn parse_node() {
+    fn parse_node_aquamarine() {
         let aquamarine_json = serde_json::json!(
             {
                 "inputs": {
@@ -295,6 +299,40 @@ mod tests {
             }
         );
         dbg!(serde_json::from_value::<Node>(aquamarine_json).unwrap());
+    }
+
+    #[test]
+    fn parse_node_hyprland() {
+        let hyprland_json = serde_json::json!(
+            {
+                "inputs": {
+                    "aquamarine": "aquamarine_2",
+                    "hyprcursor": "hyprcursor_2",
+                    "hyprlang": "hyprlang_2",
+                    "hyprutils": "hyprutils_3",
+                    "hyprwayland-scanner": "hyprwayland-scanner_2",
+                    "nixpkgs": "nixpkgs_4",
+                    "systems": "systems_4",
+                    "xdph": "xdph"
+                },
+                "locked": {
+                    "lastModified": 1723579231,
+                    "narHash": "sha256-PL9C3aOetj+TS+vXvNhh7q5bm3g70oakg+iSu5eQBUQ=",
+                    "ref": "refs/heads/main",
+                    "rev": "3b4aabe04c7756fb0a70d78b6f0e701228f46345",
+                    "revCount": 5087,
+                    "submodules": true,
+                    "type": "git",
+                    "url": "https://github.com/hyprwm/Hyprland"
+                },
+                "original": {
+                    "submodules": true,
+                    "type": "git",
+                    "url": "https://github.com/hyprwm/Hyprland"
+                }
+            }
+        );
+        dbg!(serde_json::from_value::<LockedNode>(hyprland_json).unwrap());
     }
 
     //     macro_rules! parse_lock_file {
