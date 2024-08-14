@@ -4,14 +4,15 @@ use std::io::{self, BufReader, BufWriter, Read, StdinLock, StdoutLock, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Input {
     Stdin,
     File(PathBuf),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum Output {
+    #[default]
     Stdout,
     File(PathBuf),
 }
@@ -38,7 +39,7 @@ impl Input {
         }
     }
 
-    pub fn open(&self) -> std::io::Result<InputReader> {
+    pub fn open(&self) -> io::Result<InputReader> {
         match self {
             Self::Stdin => Ok(InputReader::Stdin(io::stdin().lock())),
             Self::File(path) => Ok(InputReader::File(BufReader::new(File::open(path)?))),
