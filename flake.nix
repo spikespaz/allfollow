@@ -14,24 +14,29 @@
       pkgsFor = eachSystem (system:
         import nixpkgs {
           localSystem = system;
-          overlays = [ rust-overlay.overlays.default ];
+          overlays = [ self.overlays.default rust-overlay.overlays.default ];
         });
     in {
-      packages = eachSystem (system:
-        let
-          pkgs = pkgsFor.${system};
-          rust-stable = pkgs.rust-bin.stable.latest.minimal;
-          rustPlatform = pkgs.makeRustPlatform {
-            cargo = rust-stable;
-            rustc = rust-stable;
+      overlays = {
+        default = self.overlays.allfollow;
+        allfollow = pkgs: pkgs0:
+          let
+            rust-bin = rust-overlay.lib.mkRustBin { } pkgs;
+            rust-stable = rust-bin.stable.latest.minimal;
+            rustPlatform = pkgs.makeRustPlatform {
+              cargo = rust-stable;
+              rustc = rust-stable;
+            };
+          in {
+            allfollow =
+              pkgs.callPackage ./nix/default.nix { inherit rustPlatform; };
           };
-        in {
-          default = self.packages.${system}.allfollow;
-          allfollow = pkgs.callPackage ./nix/default.nix {
-            supportedPlatforms = import systems;
-            inherit rustPlatform;
-          };
-        });
+      };
+
+      packages = eachSystem (system: {
+        default = self.packages.${system}.allfollow;
+        inherit (pkgsFor.${system}) allfollow;
+      });
 
       devShells = eachSystem (system:
         let
