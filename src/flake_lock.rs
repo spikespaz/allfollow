@@ -65,6 +65,24 @@ impl NodeEdge {
     }
 }
 
+impl std::fmt::Display for NodeEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Indexed(index) => write!(f, "{index}"),
+            Self::Follows(path) => {
+                let mut path = path.iter().peekable();
+                while let Some(name) = path.next() {
+                    write!(f, "{name}")?;
+                    if path.peek().is_some() {
+                        write!(f, "/")?;
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 pub trait NodeEdgeRef<'a> {
     fn index(self) -> Option<Ref<'a, str>>;
 
