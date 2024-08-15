@@ -1,5 +1,6 @@
 mod cli_args;
 mod flake_lock;
+mod fmt_colors;
 
 use std::collections::HashMap;
 use std::iter::repeat;
