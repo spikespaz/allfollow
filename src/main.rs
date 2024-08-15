@@ -82,13 +82,24 @@ fn main() {
 
     let root = lock.root().unwrap();
 
-    for index in root.iter_edges().filter_map(|(_, edge)| edge.index()) {
+    for (input_name, index) in root
+        .iter_edges()
+        .filter_map(|(name, edge)| edge.index().map(|index| (name, index)))
+    {
         let input = &*lock.get_node(&*index).unwrap();
-        for (name, mut edge) in input.iter_edges_mut() {
-            match (args.no_follows, root.get_edge(name)) {
-                (true, Some(root_edge)) => *edge = (*root_edge).clone(),
-                (false, Some(_)) => *edge = NodeEdge::from_iter([name]),
-                _ => (),
+        for (edge_name, mut edge) in input.iter_edges_mut() {
+            if let Some(root_edge) = root.get_edge(edge_name) {
+                if args.no_follows {
+                    *edge = (*root_edge).clone()
+                } else {
+                    *edge = NodeEdge::from_iter([edge_name])
+                }
+                eprintln!("Updated input '{input_name}/{edge_name}' -> '{edge}'");
+            } else {
+                eprintln!(
+                    "No suitable replacement for '{input_name}/{edge_name}' ('{}')",
+                    lock.resolve_edge(&edge).unwrap()
+                );
             }
         }
     }
@@ -108,7 +119,8 @@ fn main() {
 
     let mut lock = lock;
     for index in dead_nodes {
-        lock.remove_node(index);
+        lock.remove_node(&index);
+        eprintln!("Removed orphan '{index}'");
     }
 
     let writer = args
