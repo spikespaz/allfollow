@@ -10,6 +10,7 @@ use cli_args::{Input, Output};
 use flake_lock::{
     LockFile, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
 };
+use owo_colors::OwoColorize;
 use serde::Serialize;
 use serde_json::Serializer;
 
@@ -95,11 +96,12 @@ fn main() {
                 } else {
                     *edge = NodeEdge::from_iter([edge_name])
                 }
-                eprintln!("Updated input '{input_name}/{edge_name}' -> '{edge}'");
+                // TODO differentiate between indices (green) and follows (yellow)
+                elogln!(:bold ("Redirected input", :yellow "'{input_name}/{edge_name}'", :bright_white "->", :green "'{edge}'"));
             } else {
-                eprintln!(
-                    "No suitable replacement for '{input_name}/{edge_name}' ('{}')",
-                    lock.resolve_edge(&edge).unwrap()
+                elogln!(
+                    :bold (:bright_magenta "No suitable replacement for", :yellow "'{input_name}/{edge_name}'"),
+                    :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
                 );
             }
         }
@@ -121,7 +123,7 @@ fn main() {
     let mut lock = lock;
     for index in dead_nodes {
         lock.remove_node(&index);
-        eprintln!("Removed orphan '{index}'");
+        elogln!("Pruned orphan", :bold :red "'{index}'");
     }
 
     let writer = args
