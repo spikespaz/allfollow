@@ -35,17 +35,11 @@ struct EnvArgs {
     #[bpaf(long, long("indexed"))]
     pub no_follows: bool,
     /// Path of the new lock file to write, set to `-` for stdout (default)
-    #[bpaf(
-        short('o'),
-        long,
-        optional,
-        argument("OUTPUT"),
-        map(Option::unwrap_or_default)
-    )]
+    #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
     pub output: Output,
     /// The path of `flake.lock` to read, or `-` to read from standard input.
     /// If unspecified, defaults to the current directory.
-    #[bpaf(positional("INPUT"), optional, map(|arg| arg.unwrap_or(Input::from("./flake.lock"))))]
+    #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
     pub lock_file: Input,
 }
 
