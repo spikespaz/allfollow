@@ -91,11 +91,13 @@ fn main() {
                     *edge = NodeEdge::from_iter([edge_name])
                 }
                 // TODO differentiate between indices (green) and follows (yellow)
-                elogln!(:bold ("Redirected input", :yellow "'{input_name}/{edge_name}'", :bright_white "->", :green "'{edge}'"));
+                elogln!("Redirected input", :bold (:yellow "'{input_name}/{edge_name}'", :bright_white "->", :green "'{edge}'"));
             } else {
                 elogln!(
-                    :bold (:bright_magenta "No suitable replacement for", :yellow "'{input_name}/{edge_name}'"),
-                    :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
+                    :bold (:cyan "No suitable replacement for", :yellow "'{input_name}/{edge_name}'"),
+                    :dimmed "(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
+                    // bug in owo-color
+                    // :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
                 );
             }
         }
