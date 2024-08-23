@@ -1,6 +1,13 @@
 //! If you borrow this, please give me credit.
 
 #[macro_export]
+macro_rules! elog {
+    ( $($args:tt)* ) => {
+        eprint!("{}", $crate::format_args_colored!( $($args)* ))
+    };
+}
+
+#[macro_export]
 macro_rules! elogln {
     ( $($args:tt)* ) => {
         eprintln!("{}", $crate::format_args_colored!( $($args)* ))
@@ -59,12 +66,9 @@ macro_rules! format_args_colored {
     () => { "" };
 }
 
-pub use elogln;
-pub use format_args_colored;
-
 #[cfg(test)]
 mod tests {
-    use super::elogln;
+    use crate::elogln;
     use owo_colors::OwoColorize;
 
     struct NoCopy(Vec<String>);
