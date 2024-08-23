@@ -22,7 +22,7 @@ macro_rules! format_args_colored {
 
     // Bare identifiers are not allowed, but references are.
     ( $(: $style:ident)* & $ident:ident $($tail:tt)* ) => {
-        format_args!( "{}{}", $ident $(.$style())* , $crate::format_args_colored!( $($tail)* ) )
+        format_args!( "{}{}", ( & $ident ) $(.$style())* , $crate::format_args_colored!( $($tail)* ) )
     };
 
     // Expressions must be placed in parentheses.
