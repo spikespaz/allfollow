@@ -103,18 +103,15 @@ fn main() {
         }
     }
 
-    let mut node_hits = HashMap::<_, _>::from_iter(lock.node_indices().zip(repeat(0_u32)));
-    recurse_inputs(&lock, lock.root_index(), &mut |index| {
-        *node_hits.get_mut(index).unwrap() += 1;
-    });
-
-    let dead_nodes = node_hits
-        .into_iter()
-        .filter(|(_, hits)| *hits == 0)
-        .map(|(index, _)| index.to_string())
-        .collect::<Vec<_>>();
-
     drop(root);
+
+    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+    let dead_nodes = node_hits
+        .into_inner()
+        .into_iter()
+        .filter(|&(_, count)| count == 0)
+        .map(|(index, _)| index.to_owned())
+        .collect::<Vec<_>>();
 
     let mut lock = lock;
     for index in dead_nodes {
@@ -138,10 +135,34 @@ fn main() {
     }
 }
 
-fn recurse_inputs(lock: &LockFile, index: impl AsRef<str>, op: &mut impl FnMut(&str)) {
-    op(index.as_ref());
-    for (_, edge) in lock.get_node(index).unwrap().iter_edges() {
+fn recurse_inputs(lock: &LockFile, index: String, op: &mut impl FnMut(String)) {
+    let node = lock.get_node(&index).unwrap();
+    op(index);
+    for (_, edge) in node.iter_edges() {
         let index = lock.resolve_edge(&edge).unwrap();
         recurse_inputs(lock, index, op);
+    }
+}
+
+struct FlakeNodeVisits<'a> {
+    inner: HashMap<&'a str, u32>,
+    // Index of the node which this count is relative to.
+    root_index: &'a str,
+}
+
+impl<'a> FlakeNodeVisits<'a> {
+    fn count_from_index<'new>(lock: &'new LockFile, index: &'new str) -> FlakeNodeVisits<'new> {
+        let mut node_hits = HashMap::from_iter(lock.node_indices().zip(repeat(0_u32)));
+        recurse_inputs(lock, index.to_owned(), &mut |index| {
+            *node_hits.get_mut(index.as_str()).unwrap() += 1;
+        });
+        FlakeNodeVisits {
+            inner: node_hits,
+            root_index: index,
+        }
+    }
+
+    fn into_inner(self) -> HashMap<&'a str, u32> {
+        self.inner
     }
 }
