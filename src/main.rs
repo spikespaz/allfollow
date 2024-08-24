@@ -76,8 +76,13 @@ fn main() {
         );
     }
 
+    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+    eprintln!();
+    elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+
     let root = lock.root().unwrap();
 
+    elogln!(:bold :bright_magenta "Redirecting inputs to imitate follows behavior.");
     for (input_name, index) in root
         .iter_edges()
         .filter_map(|(name, edge)| edge.index().map(|index| (name, index)))
@@ -118,6 +123,13 @@ fn main() {
         lock.remove_node(&index);
         elogln!("Pruned orphan", :bold :red "'{index}'");
     }
+
+    eprintln!();
+    elog!(
+        :bold (:bright_magenta "Flake input nodes' reference counts", :bright_green "after successful pruning" :bright_magenta ":");
+        (FlakeNodeVisits::count_from_index(&lock, lock.root_index()))
+    );
+    eprintln!();
 
     let writer = args
         .output
@@ -164,5 +176,54 @@ impl<'a> FlakeNodeVisits<'a> {
 
     fn into_inner(self) -> HashMap<&'a str, u32> {
         self.inner
+    }
+}
+
+impl<'a> From<FlakeNodeVisits<'a>> for HashMap<&'a str, u32> {
+    fn from(value: FlakeNodeVisits<'a>) -> Self {
+        value.into_inner()
+    }
+}
+
+impl<'a> std::ops::Deref for FlakeNodeVisits<'a> {
+    type Target = HashMap<&'a str, u32>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'a> std::ops::DerefMut for FlakeNodeVisits<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'a> std::fmt::Display for FlakeNodeVisits<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let max_pad = {
+            let (mut min_len, mut max_len) = (0, 0);
+            for key in self.inner.keys() {
+                min_len = std::cmp::min(min_len, key.len());
+                max_len = std::cmp::max(max_len, key.len());
+            }
+            max_len - min_len
+        };
+        for (index, count) in self.inner.iter() {
+            if index == &self.root_index {
+                f.write_fmt(format_args_colored!(
+                    :dimmed .("{:1$}", index, max_pad), :red "=", :dimmed &count;
+                ))?
+            } else if *count <= 1 {
+                f.write_fmt(format_args_colored!(
+                    :bold :bright_yellow .("{:1$}", index, max_pad), :red "=", :dimmed &count;
+                ))?
+            } else {
+                f.write_fmt(format_args_colored!(
+                    .("{:1$}", index, max_pad), :red "=", :bold :bright_green &count;
+                ))?
+            }
+        }
+        Ok(())
     }
 }
