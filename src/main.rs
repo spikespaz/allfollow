@@ -57,11 +57,32 @@ impl EnvArgs {
 fn main() {
     let args = EnvArgs::from_env();
 
-    let reader = args
-        .lock_file
+    let mut lock = read_flake_lock(args.lock_file);
+
+    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+    eprintln!();
+    elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+
+    replace_root_input_edges(&lock, args.no_follows);
+    prune_orphan_nodes(&mut lock);
+
+    eprintln!();
+    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+    elog!(
+        :bold (:bright_magenta "Flake input nodes' reference counts", :bright_green "after successful pruning" :bright_magenta ":");
+        &node_hits
+    );
+    eprintln!();
+
+    write_flake_lock(&lock, args.output, args.overwrite, args.pretty)
+}
+
+fn read_flake_lock(lock_file: Input) -> LockFile {
+    let reader = lock_file
         .open()
         .unwrap_or_else(|e| panic!("Failed to read the input file: {e}"));
     let deserializer = &mut serde_json::Deserializer::from_reader(reader);
+
     let lock: LockFile = {
         serde_path_to_error::deserialize(deserializer)
             .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
@@ -76,13 +97,28 @@ fn main() {
         );
     }
 
-    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
-    eprintln!();
-    elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+    lock
+}
 
-    let root = lock.root().unwrap();
+fn write_flake_lock(lock: &LockFile, output: Output, overwrite: bool, pretty: bool) {
+    let writer = output
+        .create(!overwrite)
+        .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
 
+    let res = if pretty {
+        lock.serialize(&mut Serializer::pretty(writer))
+    } else {
+        lock.serialize(&mut Serializer::new(writer))
+    };
+
+    if let Err(e) = res {
+        panic!("Failed while serializing to output, file is probably corrupt: {e}")
+    }
+}
+
+fn replace_root_input_edges(lock: &LockFile, indexed: bool) {
     elogln!(:bold :bright_magenta "Redirecting inputs to imitate follows behavior.");
+    let root = lock.root().unwrap();
     for (input_name, index) in root
         .iter_edges()
         .filter_map(|(name, edge)| edge.index().map(|index| (name, index)))
@@ -90,7 +126,7 @@ fn main() {
         let input = &*lock.get_node(&*index).unwrap();
         for (edge_name, mut edge) in input.iter_edges_mut() {
             if let Some(root_edge) = root.get_edge(edge_name) {
-                if args.no_follows {
+                if indexed {
                     *edge = (*root_edge).clone()
                 } else {
                     *edge = NodeEdge::from_iter([edge_name])
@@ -107,10 +143,11 @@ fn main() {
             }
         }
     }
+}
 
-    drop(root);
+fn prune_orphan_nodes(lock: &mut LockFile) {
+    let node_hits = FlakeNodeVisits::count_from_index(lock, lock.root_index());
 
-    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
     let dead_nodes = node_hits
         .into_inner()
         .into_iter()
@@ -118,32 +155,9 @@ fn main() {
         .map(|(index, _)| index.to_owned())
         .collect::<Vec<_>>();
 
-    let mut lock = lock;
     for index in dead_nodes {
         lock.remove_node(&index);
         elogln!("Pruned orphan", :bold :red "'{index}'");
-    }
-
-    eprintln!();
-    elog!(
-        :bold (:bright_magenta "Flake input nodes' reference counts", :bright_green "after successful pruning" :bright_magenta ":");
-        (FlakeNodeVisits::count_from_index(&lock, lock.root_index()))
-    );
-    eprintln!();
-
-    let writer = args
-        .output
-        .create(!args.overwrite)
-        .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
-
-    let res = if args.pretty {
-        lock.serialize(&mut Serializer::pretty(writer))
-    } else {
-        lock.serialize(&mut Serializer::new(writer))
-    };
-
-    if let Err(e) = res {
-        panic!("Failed while serializing to output, file is probably corrupt: {e}")
     }
 }
 
