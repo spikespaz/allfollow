@@ -67,6 +67,7 @@ fn main() {
     elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
 
     substitute_flake_inputs_with_follows(&lock, args.no_follows);
+    eprintln!();
     prune_orphan_nodes(&mut lock);
 
     eprintln!();
@@ -127,7 +128,7 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
         .iter_edges()
         .filter_map(|(name, edge)| edge.index().map(|index| (name, index)))
     {
-        elogln!(:bold (:bright_cyan "Replacing inputs for", :green "'{input_name}'", (:dimmed "(" :italic "'{input_index}'" :dimmed ")")));
+        elogln!(:bold (:bright_cyan "Replacing inputs for", :green "'{input_name}'"), :dimmed "(" :dimmed :italic "'{input_index}'" :dimmed ")");
         let input = &*lock
             .get_node(&*input_index)
             .expect("a node to exist with this index");
@@ -144,28 +145,25 @@ fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
     for (edge_name, mut edge) in node.iter_edges_mut() {
         if let Some(root_edge) = root.get_edge(edge_name) {
-            let old_edge = if indexed {
-                std::mem::replace(&mut *edge, (*root_edge).clone())
+            if indexed {
+                let old = std::mem::replace(&mut *edge, (*root_edge).clone());
+                elogln!("-", :yellow "'{edge_name}'", "now references", :italic :purple "'{edge}'", :dimmed "(was '{old}')");
             } else {
-                std::mem::replace(&mut *edge, NodeEdge::from_iter([edge_name]))
-            };
-            // TODO differentiate between indices (green) and follows (yellow)
-            elogln!(
-                :bold (:yellow "'{edge_name}'", :bright_white "->", :green "'{edge}'"),
-                :dimmed "(" :dimmed :italic :strikethrough :red "'{old_edge}'" :dimmed ")",
-            );
+                let old = std::mem::replace(&mut *edge, NodeEdge::from_iter([edge_name]));
+                elogln!("-", :yellow "'{edge_name}'", "now follows", :green "'{edge}'", :dimmed "(was '{old}')");
+            }
         } else {
             elogln!(
                 :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
                 :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
-                // bug in owo-color
-                // :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
             );
         }
     }
 }
 
 fn prune_orphan_nodes(lock: &mut LockFile) {
+    elogln!(:bold :bright_magenta "Pruning orphaned nodes from modified lock.");
+
     let node_hits = FlakeNodeVisits::count_from_index(lock, lock.root_index());
 
     let dead_nodes = node_hits
@@ -177,7 +175,7 @@ fn prune_orphan_nodes(lock: &mut LockFile) {
 
     for index in dead_nodes {
         lock.remove_node(&index);
-        elogln!("Pruned orphan", :bold :red "'{index}'");
+        elogln!("- removed", :red "'{index}'");
     }
 }
 
