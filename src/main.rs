@@ -30,9 +30,12 @@ enum Command {
         /// Do not imitate `inputs.*.follows`, reference node indices instead
         #[bpaf(long, long("indexed"))]
         no_follows: bool,
+        /// Do not minify the output JSON
+        #[bpaf(short('p'), long)]
+        pretty: bool,
         //
-        #[bpaf(external(json_output_options))]
-        output_opts: JsonOutputOptions,
+        #[bpaf(external(output_options))]
+        output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
@@ -43,9 +46,12 @@ enum Command {
         /// Show the data as JSON.
         #[bpaf(short('j'), long)]
         json: bool,
+        /// Do not minify the output JSON
+        #[bpaf(short('p'), long)]
+        pretty: bool,
         //
-        #[bpaf(external(json_output_options))]
-        output_opts: JsonOutputOptions,
+        #[bpaf(external(output_options))]
+        output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
@@ -53,19 +59,16 @@ enum Command {
     },
 }
 
-/// Options for output handling:
+/// Generic options for output handling:
 #[derive(Debug, Clone, Bpaf)]
-struct JsonOutputOptions {
-    /// Write new lock file back to the source
+struct OutputOptions {
+    /// Write new file back to `INPUT` (if specified)
     #[bpaf(short('I'), long)]
     in_place: bool,
     /// Overwrite the output file if it exists
     #[bpaf(short('f'), long, long("force"))]
     overwrite: bool,
-    /// Do not minify the output JSON
-    #[bpaf(short('p'), long)]
-    pretty: bool,
-    /// Path of the new lock file to write, set to `-` for stdout (default)
+    /// Path of the file to write, set to `-` for stdout (default)
     #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
     output: Output,
 }
@@ -77,29 +80,17 @@ impl Command {
         match &mut args {
             Command::Prune {
                 lock_file,
-                output_opts:
-                    JsonOutputOptions {
-                        in_place,
-                        overwrite,
-                        pretty: _,
-                        output,
-                    },
+                output_opts,
                 ..
             }
             | Command::Count {
                 lock_file,
-                output_opts:
-                    JsonOutputOptions {
-                        in_place,
-                        overwrite,
-                        pretty: _,
-                        output,
-                    },
+                output_opts,
                 ..
             } => {
-                if *in_place {
-                    *output = Output::from(lock_file.clone());
-                    *overwrite = true;
+                if output_opts.in_place {
+                    output_opts.output = Output::from(lock_file.clone());
+                    output_opts.overwrite = true;
                 }
             }
         };
@@ -112,11 +103,11 @@ fn main() {
         Command::Prune {
             no_follows,
             lock_file,
+            pretty,
             output_opts:
-                JsonOutputOptions {
+                OutputOptions {
                     in_place: _,
                     overwrite,
-                    pretty,
                     output,
                 },
         } => {
@@ -142,12 +133,12 @@ fn main() {
         }
         Command::Count {
             json,
+            pretty,
             lock_file,
             output_opts:
-                JsonOutputOptions {
+                OutputOptions {
                     in_place: _,
                     overwrite,
-                    pretty,
                     output,
                 },
         } => {
