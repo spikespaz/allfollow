@@ -1,5 +1,6 @@
-use dot_generator::{attr, edge, graph, id, node, node_id};
+use dot_generator::{attr, edge, graph, id, node, node_id, stmt};
 use dot_structures::{Attribute, Edge, EdgeTy, Graph, Id, Node, NodeId, Stmt, Vertex};
+use heck::ToSnakeCase;
 
 use crate::flake_lock::LockFile;
 
@@ -14,10 +15,16 @@ impl TryFrom<LockFile> for Graph {
             .map(|index| (index, lock.get_node(index).expect("a node to exist")));
 
         for (index, node) in nodes {
-            graph.add_stmt(Stmt::Node(node!(index; attr!("shape", "circle"))));
-            for (_name, edge) in node.iter_edges() {
-                let res = lock.resolve_edge(&edge).expect("resolution");
-                graph.add_stmt(Stmt::Edge(edge!(node_id!(index) => node_id!(&res))));
+            let node_id = if index == "root" {
+                "flake_root".into()
+            } else {
+                index.to_snake_case()
+            };
+            graph.add_stmt(stmt!(node!(node_id; attr!("shape", "circle"))));
+            for (input_name, edge) in node.iter_edges() {
+                let input_node_index = lock.resolve_edge(&edge).expect("resolution");
+                let input_node_id = input_node_index.to_snake_case();
+                graph.add_stmt(stmt!(edge!(node_id!(node_id) => node_id!(input_node_id))));
             }
         }
 

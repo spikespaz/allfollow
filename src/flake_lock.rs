@@ -157,8 +157,8 @@ impl Node {
     }
 }
 
-impl LockFile {
-    pub fn new() -> Self {
+impl Default for LockFile {
+    fn default() -> Self {
         static ROOT: &str = "root";
         Self {
             nodes: HashMap::from_iter([(
@@ -171,7 +171,9 @@ impl LockFile {
             version: MAX_SUPPORTED_LOCK_VERSION,
         }
     }
+}
 
+impl LockFile {
     pub fn root(&self) -> Option<Ref<Node>> {
         self.nodes.get(&self.root).map(RefCell::borrow)
     }

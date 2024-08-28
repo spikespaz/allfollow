@@ -183,6 +183,7 @@ fn main() {
                 .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
 
             let mut printer = PrinterContext::default();
+            printer.with_semi().with_indent_step(4);
             let dot_graph = graphviz_rust::print(lock.try_into().unwrap(), &mut printer);
 
             let res = writer.write(dot_graph.as_bytes());
