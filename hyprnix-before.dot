@@ -1,0 +1,127 @@
+strict digraph flakelock {
+  nixpkgs_8[shape=circle]
+  hyprutils_5[shape=circle]
+  hyprutils_5 -> nixpkgs_7
+  hyprutils_5 -> systems_7
+  systems_7[shape=circle]
+  systems_8[shape=circle]
+  systems_9[shape=circle]
+  hyprutils_6[shape=circle]
+  hyprutils_6 -> nixpkgs_10
+  hyprutils_6 -> systems_10
+  nixpkgs_10[shape=circle]
+  aquamarine[shape=circle]
+  aquamarine -> systems
+  aquamarine -> hyprwayland-scanner
+  aquamarine -> hyprutils
+  aquamarine -> nixpkgs
+  hyprcursor[shape=circle]
+  hyprcursor -> nixpkgs_3
+  hyprcursor -> systems_3
+  hyprcursor -> hyprlang
+  hyprland[shape=circle]
+  hyprland -> hyprcursor_2
+  hyprland -> hyprlang_2
+  hyprland -> hyprutils_3
+  hyprland -> hyprwayland-scanner_2
+  hyprland -> nixpkgs_4
+  hyprland -> xdph
+  hyprland -> aquamarine_2
+  hyprland -> systems_4
+  nixpkgs_6[shape=circle]
+  root[shape=circle]
+  root -> aquamarine
+  root -> xdg-desktop-portal-hyprland
+  root -> hyprcursor
+  root -> hyprutils_5
+  root -> nixpkgs_9
+  root -> hyprwayland-scanner_3
+  root -> bird-nix-lib
+  root -> systems_9
+  root -> hyprlang_3
+  root -> hyprland-protocols_2
+  root -> hyprland
+  hyprwayland-scanner_3[shape=circle]
+  hyprwayland-scanner_3 -> nixpkgs_8
+  hyprwayland-scanner_3 -> systems_8
+  hyprland-protocols[shape=circle]
+  hyprland-protocols -> nixpkgs_4
+  hyprland-protocols -> systems_4
+  bird-nix-lib[shape=circle]
+  bird-nix-lib -> systems_2
+  bird-nix-lib -> nixpkgs_2
+  nixpkgs_9[shape=circle]
+  systems[shape=circle]
+  hyprlang_3[shape=circle]
+  hyprlang_3 -> systems_6
+  hyprlang_3 -> nixpkgs_6
+  hyprlang_3 -> hyprutils_4
+  hyprlang_4[shape=circle]
+  hyprlang_4 -> nixpkgs_10
+  hyprlang_4 -> hyprutils_6
+  hyprlang_4 -> systems_10
+  hyprutils[shape=circle]
+  hyprutils -> nixpkgs
+  hyprutils -> systems
+  hyprcursor_2[shape=circle]
+  hyprcursor_2 -> systems_4
+  hyprcursor_2 -> hyprlang_2
+  hyprcursor_2 -> nixpkgs_4
+  hyprutils_3[shape=circle]
+  hyprutils_3 -> nixpkgs_4
+  hyprutils_3 -> systems_4
+  hyprwayland-scanner[shape=circle]
+  hyprwayland-scanner -> systems
+  hyprwayland-scanner -> nixpkgs
+  nixpkgs_4[shape=circle]
+  systems_2[shape=circle]
+  nixpkgs_7[shape=circle]
+  systems_4[shape=circle]
+  systems_5[shape=circle]
+  xdph[shape=circle]
+  xdph -> hyprland-protocols
+  xdph -> nixpkgs_4
+  xdph -> systems_4
+  xdph -> hyprlang_2
+  hyprland-protocols_2[shape=circle]
+  hyprland-protocols_2 -> systems_5
+  hyprland-protocols_2 -> nixpkgs_5
+  nixpkgs_5[shape=circle]
+  hyprland-protocols_3[shape=circle]
+  hyprland-protocols_3 -> nixpkgs_10
+  hyprland-protocols_3 -> systems_11
+  hyprlang_2[shape=circle]
+  hyprlang_2 -> hyprutils_3
+  hyprlang_2 -> nixpkgs_4
+  hyprlang_2 -> systems_4
+  aquamarine_2[shape=circle]
+  aquamarine_2 -> systems_4
+  aquamarine_2 -> nixpkgs_4
+  aquamarine_2 -> hyprwayland-scanner_2
+  aquamarine_2 -> hyprutils_3
+  systems_11[shape=circle]
+  nixpkgs_3[shape=circle]
+  hyprlang[shape=circle]
+  hyprlang -> systems_3
+  hyprlang -> hyprutils_2
+  hyprlang -> nixpkgs_3
+  hyprwayland-scanner_2[shape=circle]
+  hyprwayland-scanner_2 -> nixpkgs_4
+  hyprwayland-scanner_2 -> systems_4
+  systems_10[shape=circle]
+  hyprutils_2[shape=circle]
+  hyprutils_2 -> nixpkgs_3
+  hyprutils_2 -> systems_3
+  nixpkgs[shape=circle]
+  nixpkgs_2[shape=circle]
+  hyprutils_4[shape=circle]
+  hyprutils_4 -> nixpkgs_6
+  hyprutils_4 -> systems_6
+  xdg-desktop-portal-hyprland[shape=circle]
+  xdg-desktop-portal-hyprland -> hyprlang_4
+  xdg-desktop-portal-hyprland -> systems_11
+  xdg-desktop-portal-hyprland -> nixpkgs_10
+  xdg-desktop-portal-hyprland -> hyprland-protocols_3
+  systems_3[shape=circle]
+  systems_6[shape=circle]
+}
