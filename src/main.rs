@@ -14,6 +14,7 @@ use flake_lock::{
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use serde_json::Serializer;
+use serde_path_to_error::serialize;
 
 static EXPECT_ROOT_EXIST: &str = "the root node to exist";
 
@@ -23,62 +24,135 @@ static EXPECT_ROOT_EXIST: &str = "the root node to exist";
 /// This small tool aims to replace every instance of
 /// `inputs.*.inputs.*.follows = "*";` in your `flake.nix` with automation.
 #[derive(Debug, Clone, Bpaf)]
-#[bpaf(options, generate(parse_env_args))]
-struct EnvArgs {
-    /// Write new lock file back to the source
-    #[bpaf(short('I'), long)]
-    pub in_place: bool,
-    /// Overwrite the output file if it exists
-    #[bpaf(short('f'), long, long("force"))]
-    pub overwrite: bool,
-    /// Do not minify the output JSON
-    #[bpaf(short('p'), long)]
-    pub pretty: bool,
-    /// Do not imitate `inputs.*.follows`, reference node indices instead
-    #[bpaf(long, long("indexed"))]
-    pub no_follows: bool,
-    /// Path of the new lock file to write, set to `-` for stdout (default)
-    #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
-    pub output: Output,
-    /// The path of `flake.lock` to read, or `-` to read from standard input.
-    /// If unspecified, defaults to the current directory.
-    #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
-    pub lock_file: Input,
+#[bpaf(options, generate(parse_command_env_args))]
+enum Command {
+    #[bpaf(command("prune"))]
+    Prune {
+        /// Write new lock file back to the source
+        #[bpaf(short('I'), long)]
+        in_place: bool,
+        /// Overwrite the output file if it exists
+        #[bpaf(short('f'), long, long("force"))]
+        overwrite: bool,
+        /// Do not imitate `inputs.*.follows`, reference node indices instead
+        #[bpaf(long, long("indexed"))]
+        no_follows: bool,
+        /// Path of the new lock file to write, set to `-` for stdout (default)
+        #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
+        output: Output,
+        /// Do not minify the output JSON
+        #[bpaf(short('p'), long)]
+        pretty: bool,
+        /// The path of `flake.lock` to read, or `-` to read from standard input.
+        /// If unspecified, defaults to the current directory.
+        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        lock_file: Input,
+    },
+    #[bpaf(command("count"))]
+    Count {
+        /// Show the data as JSON.
+        #[bpaf(short('j'), long)]
+        json: bool,
+        /// Write new lock file back to the source
+        #[bpaf(short('I'), long)]
+        in_place: bool,
+        /// Overwrite the output file if it exists
+        #[bpaf(short('f'), long, long("force"))]
+        overwrite: bool,
+        /// Do not minify the output JSON
+        #[bpaf(short('p'), long, fallback(true))]
+        pretty: bool,
+        /// Path of the new lock file to write, set to `-` for stdout (default)
+        #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
+        output: Output,
+        /// The path of `flake.lock` to read, or `-` to read from standard input.
+        /// If unspecified, defaults to the current directory.
+        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        lock_file: Input,
+    },
 }
 
-impl EnvArgs {
+impl Command {
     fn from_env() -> Self {
-        let mut args = parse_env_args().run();
-        if args.in_place {
-            args.output = Output::from(args.lock_file.clone());
-            args.overwrite = true;
-        }
+        let mut args = parse_command_env_args().run();
+        #[allow(clippy::single_match)]
+        match &mut args {
+            Command::Prune {
+                in_place,
+                overwrite,
+                output,
+                lock_file,
+                ..
+            } => {
+                if *in_place {
+                    *output = Output::from(lock_file.clone());
+                    *overwrite = true;
+                }
+            }
+            Command::Count {
+                in_place,
+                overwrite,
+                output,
+                lock_file,
+                ..
+            } => {
+                if *in_place {
+                    *output = Output::from(lock_file.clone());
+                    *overwrite = true;
+                }
+            }
+        };
         args
     }
 }
 
 fn main() {
-    let args = EnvArgs::from_env();
+    match Command::from_env() {
+        Command::Prune {
+            in_place: _,
+            overwrite,
+            no_follows,
+            output,
+            pretty,
+            lock_file,
+        } => {
+            let mut lock = read_flake_lock(lock_file);
 
-    let mut lock = read_flake_lock(args.lock_file);
+            let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+            eprintln!();
+            elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
 
-    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
-    eprintln!();
-    elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+            substitute_flake_inputs_with_follows(&lock, no_follows);
+            eprintln!();
+            prune_orphan_nodes(&mut lock);
 
-    substitute_flake_inputs_with_follows(&lock, args.no_follows);
-    eprintln!();
-    prune_orphan_nodes(&mut lock);
+            eprintln!();
+            let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+            elog!(
+                :bold (:bright_magenta "Flake input nodes' reference counts", :bright_green "after successful pruning" :bright_magenta ":");
+                &node_hits
+            );
+            eprintln!();
 
-    eprintln!();
-    let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
-    elog!(
-        :bold (:bright_magenta "Flake input nodes' reference counts", :bright_green "after successful pruning" :bright_magenta ":");
-        &node_hits
-    );
-    eprintln!();
-
-    write_flake_lock(&lock, args.output, args.overwrite, args.pretty)
+            serialize_to_json_output(&lock, output, overwrite, pretty)
+        }
+        Command::Count {
+            json,
+            in_place: _,
+            overwrite,
+            pretty,
+            output,
+            lock_file,
+        } => {
+            let lock = read_flake_lock(lock_file);
+            let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
+            if json {
+                serialize_to_json_output(&*node_hits, output, overwrite, pretty)
+            } else {
+                logln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+            }
+        }
+    }
 }
 
 fn read_flake_lock(lock_file: Input) -> LockFile {
@@ -104,15 +178,15 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
     lock
 }
 
-fn write_flake_lock(lock: &LockFile, output: Output, overwrite: bool, pretty: bool) {
+fn serialize_to_json_output(value: impl Serialize, output: Output, overwrite: bool, pretty: bool) {
     let writer = output
         .create(!overwrite)
         .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
 
     let res = if pretty {
-        lock.serialize(&mut Serializer::pretty(writer))
+        value.serialize(&mut Serializer::pretty(writer))
     } else {
-        lock.serialize(&mut Serializer::new(writer))
+        value.serialize(&mut Serializer::new(writer))
     };
 
     if let Err(e) = res {

@@ -1,6 +1,20 @@
 //! If you borrow this, please give me credit.
 
 #[macro_export]
+macro_rules! log {
+    ( $($args:tt)* ) => {
+        print!("{}", $crate::format_args_colored!( $($args)* ))
+    };
+}
+
+#[macro_export]
+macro_rules! logln {
+    ( $($args:tt)* ) => {
+        println!("{}", $crate::format_args_colored!( $($args)* ))
+    };
+}
+
+#[macro_export]
 macro_rules! elog {
     ( $($args:tt)* ) => {
         eprint!("{}", $crate::format_args_colored!( $($args)* ))
