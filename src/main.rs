@@ -8,11 +8,14 @@ use std::iter::repeat;
 use bpaf::Bpaf;
 use cli_args::{Input, Output};
 use flake_lock::{
-    LockFile, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION, MIN_SUPPORTED_LOCK_VERSION,
+    LockFile, Node, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION,
+    MIN_SUPPORTED_LOCK_VERSION,
 };
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use serde_json::Serializer;
+
+static EXPECT_ROOT_EXIST: &str = "the root node to exist";
 
 /// Imitate Nix flake input following behavior as a post-process,
 /// so that you can stop manually maintaining tedious connections
@@ -63,7 +66,7 @@ fn main() {
     eprintln!();
     elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
 
-    replace_root_input_edges(&lock, args.no_follows);
+    substitute_flake_inputs_with_follows(&lock, args.no_follows);
     prune_orphan_nodes(&mut lock);
 
     eprintln!();
@@ -116,31 +119,48 @@ fn write_flake_lock(lock: &LockFile, output: Output, overwrite: bool, pretty: bo
     }
 }
 
-fn replace_root_input_edges(lock: &LockFile, indexed: bool) {
+fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
     elogln!(:bold :bright_magenta "Redirecting inputs to imitate follows behavior.");
-    let root = lock.root().unwrap();
-    for (input_name, index) in root
+
+    let root = lock.root().expect(EXPECT_ROOT_EXIST);
+    for (input_name, input_index) in root
         .iter_edges()
         .filter_map(|(name, edge)| edge.index().map(|index| (name, index)))
     {
-        let input = &*lock.get_node(&*index).unwrap();
-        for (edge_name, mut edge) in input.iter_edges_mut() {
-            if let Some(root_edge) = root.get_edge(edge_name) {
-                if indexed {
-                    *edge = (*root_edge).clone()
-                } else {
-                    *edge = NodeEdge::from_iter([edge_name])
-                }
-                // TODO differentiate between indices (green) and follows (yellow)
-                elogln!("Redirected input", :bold (:yellow "'{input_name}/{edge_name}'", :bright_white "->", :green "'{edge}'"));
+        elogln!(:bold (:bright_cyan "Replacing inputs for", :green "'{input_name}'", (:dimmed "(" :italic "'{input_index}'" :dimmed ")")));
+        let input = &*lock
+            .get_node(&*input_index)
+            .expect("a node to exist with this index");
+        substitute_node_inputs_with_root_inputs(lock, input, indexed);
+    }
+}
+
+/// When `indexed == false`, the input replacements all will reference identically
+/// named inputs from the root node. This imitates input following behavior.
+///
+/// Otherwise, if `indexed == true`, the each input replacement will be cloned
+/// verbatim from the root node, most likely retaining a `NodeEdge::Indexed`.
+fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed: bool) {
+    let root = lock.root().expect(EXPECT_ROOT_EXIST);
+    for (edge_name, mut edge) in node.iter_edges_mut() {
+        if let Some(root_edge) = root.get_edge(edge_name) {
+            let old_edge = if indexed {
+                std::mem::replace(&mut *edge, (*root_edge).clone())
             } else {
-                elogln!(
-                    :bold (:cyan "No suitable replacement for", :yellow "'{input_name}/{edge_name}'"),
-                    :dimmed "(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
-                    // bug in owo-color
-                    // :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
-                );
-            }
+                std::mem::replace(&mut *edge, NodeEdge::from_iter([edge_name]))
+            };
+            // TODO differentiate between indices (green) and follows (yellow)
+            elogln!(
+                :bold (:yellow "'{edge_name}'", :bright_white "->", :green "'{edge}'"),
+                :dimmed "(" :dimmed :italic :strikethrough :red "'{old_edge}'" :dimmed ")",
+            );
+        } else {
+            elogln!(
+                :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
+                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
+                // bug in owo-color
+                // :dimmed ("(" :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") ")")
+            );
         }
     }
 }
