@@ -14,7 +14,6 @@ use flake_lock::{
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use serde_json::Serializer;
-use serde_path_to_error::serialize;
 
 static EXPECT_ROOT_EXIST: &str = "the root node to exist";
 
@@ -28,21 +27,12 @@ static EXPECT_ROOT_EXIST: &str = "the root node to exist";
 enum Command {
     #[bpaf(command("prune"))]
     Prune {
-        /// Write new lock file back to the source
-        #[bpaf(short('I'), long)]
-        in_place: bool,
-        /// Overwrite the output file if it exists
-        #[bpaf(short('f'), long, long("force"))]
-        overwrite: bool,
         /// Do not imitate `inputs.*.follows`, reference node indices instead
         #[bpaf(long, long("indexed"))]
         no_follows: bool,
-        /// Path of the new lock file to write, set to `-` for stdout (default)
-        #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
-        output: Output,
-        /// Do not minify the output JSON
-        #[bpaf(short('p'), long)]
-        pretty: bool,
+        //
+        #[bpaf(external(json_output_options))]
+        output_opts: JsonOutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
@@ -53,23 +43,31 @@ enum Command {
         /// Show the data as JSON.
         #[bpaf(short('j'), long)]
         json: bool,
-        /// Write new lock file back to the source
-        #[bpaf(short('I'), long)]
-        in_place: bool,
-        /// Overwrite the output file if it exists
-        #[bpaf(short('f'), long, long("force"))]
-        overwrite: bool,
-        /// Do not minify the output JSON
-        #[bpaf(short('p'), long, fallback(true))]
-        pretty: bool,
-        /// Path of the new lock file to write, set to `-` for stdout (default)
-        #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
-        output: Output,
+        //
+        #[bpaf(external(json_output_options))]
+        output_opts: JsonOutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
+}
+
+/// Options for output handling:
+#[derive(Debug, Clone, Bpaf)]
+struct JsonOutputOptions {
+    /// Write new lock file back to the source
+    #[bpaf(short('I'), long)]
+    in_place: bool,
+    /// Overwrite the output file if it exists
+    #[bpaf(short('f'), long, long("force"))]
+    overwrite: bool,
+    /// Do not minify the output JSON
+    #[bpaf(short('p'), long)]
+    pretty: bool,
+    /// Path of the new lock file to write, set to `-` for stdout (default)
+    #[bpaf(short('o'), long, argument("OUTPUT"), fallback(Output::Stdout))]
+    output: Output,
 }
 
 impl Command {
@@ -78,22 +76,25 @@ impl Command {
         #[allow(clippy::single_match)]
         match &mut args {
             Command::Prune {
-                in_place,
-                overwrite,
-                output,
                 lock_file,
+                output_opts:
+                    JsonOutputOptions {
+                        in_place,
+                        overwrite,
+                        pretty: _,
+                        output,
+                    },
                 ..
-            } => {
-                if *in_place {
-                    *output = Output::from(lock_file.clone());
-                    *overwrite = true;
-                }
             }
-            Command::Count {
-                in_place,
-                overwrite,
-                output,
+            | Command::Count {
                 lock_file,
+                output_opts:
+                    JsonOutputOptions {
+                        in_place,
+                        overwrite,
+                        pretty: _,
+                        output,
+                    },
                 ..
             } => {
                 if *in_place {
@@ -109,12 +110,15 @@ impl Command {
 fn main() {
     match Command::from_env() {
         Command::Prune {
-            in_place: _,
-            overwrite,
             no_follows,
-            output,
-            pretty,
             lock_file,
+            output_opts:
+                JsonOutputOptions {
+                    in_place: _,
+                    overwrite,
+                    pretty,
+                    output,
+                },
         } => {
             let mut lock = read_flake_lock(lock_file);
 
@@ -138,18 +142,21 @@ fn main() {
         }
         Command::Count {
             json,
-            in_place: _,
-            overwrite,
-            pretty,
-            output,
             lock_file,
+            output_opts:
+                JsonOutputOptions {
+                    in_place: _,
+                    overwrite,
+                    pretty,
+                    output,
+                },
         } => {
             let lock = read_flake_lock(lock_file);
             let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
             if json {
                 serialize_to_json_output(&*node_hits, output, overwrite, pretty)
             } else {
-                logln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
+                logln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits)
             }
         }
     }
