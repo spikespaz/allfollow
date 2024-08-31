@@ -1,7 +1,10 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     systems = {
       url = "github:nix-systems/default";
       flake = false;
@@ -14,53 +17,24 @@
       pkgsFor = eachSystem (system:
         import nixpkgs {
           localSystem = system;
-          overlays = [ self.overlays.default rust-overlay.overlays.default ];
+          overlays = [ self.overlays.default ];
         });
+
+      packageName = (lib.importTOML ./Cargo.toml).package.name;
     in {
-      overlays = {
-        default = self.overlays.allfollow;
-        allfollow = pkgs: pkgs0:
-          let
-            rust-bin = rust-overlay.lib.mkRustBin { } pkgs;
-            rust-stable = rust-bin.stable.latest.minimal;
-            rustPlatform = pkgs.makeRustPlatform {
-              cargo = rust-stable;
-              rustc = rust-stable;
-            };
-          in {
-            allfollow =
-              pkgs.callPackage ./nix/default.nix { inherit rustPlatform; };
-          };
-      };
+      overlays =
+        import ./nix/overlays { inherit self lib rust-overlay packageName; };
 
-      packages = eachSystem (system: {
-        default = self.packages.${system}.allfollow;
-        inherit (pkgsFor.${system}) allfollow;
-      });
+      packages = lib.mapAttrs (system: pkgs: {
+        default = self.packages.${system}.${packageName};
+        ${packageName} = pkgs.${packageName};
+      }) pkgsFor;
 
-      devShells = eachSystem (system:
-        let
-          pkgs = pkgsFor.${system};
-          rust-stable = pkgs.rust-bin.stable.latest.minimal.override {
-            extensions = [ "rust-src" "rust-docs" "clippy" ];
-          };
-        in {
-          default = pkgs.mkShell {
-            strictDeps = true;
-            packages = with pkgs; [
-              # Derivations in `rust-stable` take precedence over nightly.
-              (lib.hiPrio rust-stable)
+      devShells = lib.mapAttrs (system: pkgs: {
+        default = pkgs.callPackage ./nix/shell.nix { inherit packageName; };
+      }) pkgsFor;
 
-              # Use rustfmt, and other tools that require nightly features.
-              (rust-bin.selectLatestNightlyWith (toolchain:
-                toolchain.minimal.override {
-                  extensions = [ "rustfmt" "rust-analyzer" ];
-                }))
-            ];
-            # RUST_BACKTRACE = 1;
-          };
-        });
-
-      formatter = eachSystem (system: pkgsFor.${system}.nixfmt-classic);
+      formatter =
+        eachSystem (system: nixpkgs.legacyPackages.${system}.nixfmt-classic);
     };
 }
