@@ -1,21 +1,15 @@
-{
-# Must be provided in `callPackage` for accuracy.
-sourceRoot ? ./..,
-#
-lib, rustPlatform
-#
-}:
+{ sourceRoot ? ../., lib, rustPlatform }:
 let manifest = lib.importTOML "${sourceRoot}/Cargo.toml";
 in rustPlatform.buildRustPackage {
+  strictDeps = true;
   pname = manifest.package.name;
   version = manifest.package.version;
-  src = lib.cleanSource sourceRoot;
   cargoLock.lockFile = "${sourceRoot}/Cargo.lock";
+  src = lib.cleanSource sourceRoot;
   meta = {
     inherit (manifest.package) description homepage;
-    license = lib.licenses.mit;
-    maintainers = [ lib.maintainers.spikespaz ];
-    platforms = lib.platforms.linux ++ lib.platforms.darwin;
+    license = with lib.licenses; [ mit asl20 ];
+    platforms = lib.platforms.unix;
     mainProgram = manifest.package.name;
   };
 }
