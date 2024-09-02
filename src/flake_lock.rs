@@ -188,6 +188,12 @@ impl LockFile {
         self.nodes.keys().map(String::as_str)
     }
 
+    pub fn iter_nodes(&self) -> impl Iterator<Item = (&str, Ref<Node>)> {
+        self.nodes
+            .iter()
+            .map(|(index, node)| (index.as_str(), node.borrow()))
+    }
+
     pub fn get_node(&self, index: impl AsRef<str>) -> Option<Ref<Node>> {
         self.nodes.get(index.as_ref()).map(RefCell::borrow)
     }
