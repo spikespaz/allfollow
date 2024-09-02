@@ -1,4 +1,5 @@
 mod cli_args;
+mod dot_graph;
 mod flake_lock;
 mod fmt_colors;
 
@@ -57,6 +58,15 @@ enum Command {
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
+    #[bpaf(command("dot-graph"))]
+    DotGraph {
+        #[bpaf(external(output_options))]
+        output_opts: OutputOptions,
+        /// The path of `flake.lock` to read, or `-` to read from standard input.
+        /// If unspecified, defaults to the current directory.
+        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        lock_file: Input,
+    },
 }
 
 /// Generic options for output handling:
@@ -84,6 +94,11 @@ impl Command {
                 ..
             }
             | Command::Count {
+                lock_file,
+                output_opts,
+                ..
+            }
+            | Command::DotGraph {
                 lock_file,
                 output_opts,
                 ..
@@ -148,6 +163,25 @@ fn main() {
                 serialize_to_json_output(&*node_hits, output, overwrite, pretty)
             } else {
                 logln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits)
+            }
+        }
+        Command::DotGraph {
+            lock_file,
+            output_opts:
+                OutputOptions {
+                    in_place: _,
+                    overwrite,
+                    output,
+                },
+        } => {
+            let lock = read_flake_lock(lock_file);
+
+            let mut writer = output
+                .create(!overwrite)
+                .unwrap_or_else(|e| panic!("Could not write to output: {e}"));
+
+            if let Err(e) = dotwalk::render(&lock, &mut writer) {
+                panic!("Failed while serializing to output, file is probably corrupt: {e}")
             }
         }
     }
