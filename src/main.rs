@@ -2,7 +2,6 @@ mod cli_args;
 mod flake_lock;
 mod fmt_colors;
 
-use std::collections::HashMap;
 use std::iter::repeat;
 
 use bpaf::Bpaf;
@@ -11,6 +10,7 @@ use flake_lock::{
     LockFile, Node, NodeEdge, NodeEdgeRef as _, MAX_SUPPORTED_LOCK_VERSION,
     MIN_SUPPORTED_LOCK_VERSION,
 };
+use indexmap::IndexMap;
 use owo_colors::OwoColorize;
 use serde::Serialize;
 use serde_json::Serializer;
@@ -261,14 +261,14 @@ fn recurse_inputs(lock: &LockFile, index: String, op: &mut impl FnMut(String)) {
 }
 
 struct FlakeNodeVisits<'a> {
-    inner: HashMap<&'a str, u32>,
+    inner: IndexMap<&'a str, u32>,
     // Index of the node which this count is relative to.
     root_index: &'a str,
 }
 
 impl<'a> FlakeNodeVisits<'a> {
     fn count_from_index<'new>(lock: &'new LockFile, index: &'new str) -> FlakeNodeVisits<'new> {
-        let mut node_hits = HashMap::from_iter(lock.node_indices().zip(repeat(0_u32)));
+        let mut node_hits = IndexMap::from_iter(lock.node_indices().zip(repeat(0_u32)));
         recurse_inputs(lock, index.to_owned(), &mut |index| {
             *node_hits.get_mut(index.as_str()).unwrap() += 1;
         });
@@ -278,19 +278,19 @@ impl<'a> FlakeNodeVisits<'a> {
         }
     }
 
-    fn into_inner(self) -> HashMap<&'a str, u32> {
+    fn into_inner(self) -> IndexMap<&'a str, u32> {
         self.inner
     }
 }
 
-impl<'a> From<FlakeNodeVisits<'a>> for HashMap<&'a str, u32> {
+impl<'a> From<FlakeNodeVisits<'a>> for IndexMap<&'a str, u32> {
     fn from(value: FlakeNodeVisits<'a>) -> Self {
         value.into_inner()
     }
 }
 
 impl<'a> std::ops::Deref for FlakeNodeVisits<'a> {
-    type Target = HashMap<&'a str, u32>;
+    type Target = IndexMap<&'a str, u32>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner

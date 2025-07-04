@@ -1,6 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut};
-use std::collections::HashMap;
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_SUPPORTED_LOCK_VERSION: u32 = 7;
@@ -13,7 +13,7 @@ fn default_true() -> bool {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LockFile {
-    nodes: HashMap<String, RefCell<Node>>,
+    nodes: IndexMap<String, RefCell<Node>>,
     root: String,
     version: u32,
 }
@@ -37,8 +37,8 @@ pub enum Node {
 pub struct LockedNode {
     #[serde(skip_serializing_if = "Clone::clone", default = "default_true")]
     flake: bool,
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    inputs: HashMap<String, RefCell<NodeEdge>>,
+    #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
+    inputs: IndexMap<String, RefCell<NodeEdge>>,
     locked: serde_json::Value,
     original: serde_json::Value,
 }
@@ -46,7 +46,7 @@ pub struct LockedNode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UnlockedNode {
-    inputs: HashMap<String, RefCell<NodeEdge>>,
+    inputs: IndexMap<String, RefCell<NodeEdge>>,
 }
 
 impl NodeEdge {
@@ -128,7 +128,7 @@ where
 }
 
 impl Node {
-    fn edges(&self) -> &HashMap<String, RefCell<NodeEdge>> {
+    fn edges(&self) -> &IndexMap<String, RefCell<NodeEdge>> {
         match self {
             Self::Locked(LockedNode { inputs, .. }) => inputs,
             Self::Unlocked(UnlockedNode { inputs }) => inputs,
@@ -164,10 +164,10 @@ impl LockFile {
     pub fn new() -> Self {
         static ROOT: &str = "root";
         Self {
-            nodes: HashMap::from_iter([(
+            nodes: IndexMap::from_iter([(
                 ROOT.into(),
                 RefCell::new(Node::Unlocked(UnlockedNode {
-                    inputs: HashMap::new(),
+                    inputs: IndexMap::new(),
                 })),
             )]),
             root: ROOT.into(),
@@ -202,7 +202,7 @@ impl LockFile {
 
     pub fn remove_node(&mut self, index: impl AsRef<str>) -> Option<Node> {
         self.nodes
-            .remove(index.as_ref())
+            .swap_remove(index.as_ref())
             .map(|cell| cell.into_inner())
     }
 
