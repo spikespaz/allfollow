@@ -1,6 +1,7 @@
 ---
 source: src/main.rs
-expression: lock
+description: "Hyprland's `flake.lock` after substituting transitive inputs with follows."
+input_file: samples/hyprland/no-follows/flake.lock
 ---
 {
   "nodes": {

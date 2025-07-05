@@ -345,6 +345,15 @@ mod tests {
         let mut lock = read_flake_lock(HYPRLAND_LOCK_NO_FOLLOWS.into());
         substitute_flake_inputs_with_follows(&lock, false);
         prune_orphan_nodes(&mut lock);
-        assert_json_snapshot!(lock);
+        insta::with_settings!(
+            {
+                description => "Hyprland's `flake.lock` after substituting transitive inputs with follows.",
+                input_file => HYPRLAND_LOCK_NO_FOLLOWS,
+                omit_expression => true,
+            },
+            {
+                assert_json_snapshot!(&lock);
+            }
+        );
     }
 }
