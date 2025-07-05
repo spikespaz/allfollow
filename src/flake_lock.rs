@@ -202,7 +202,7 @@ impl LockFile {
 
     pub fn remove_node(&mut self, index: impl AsRef<str>) -> Option<Node> {
         self.nodes
-            .swap_remove(index.as_ref())
+            .shift_remove(index.as_ref())
             .map(|cell| cell.into_inner())
     }
 
