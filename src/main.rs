@@ -331,3 +331,20 @@ impl<'a> std::fmt::Display for FlakeNodeVisits<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use insta::assert_json_snapshot;
+
+    use crate::{prune_orphan_nodes, read_flake_lock, substitute_flake_inputs_with_follows};
+
+    static HYPRLAND_LOCK_NO_FOLLOWS: &str = "samples/hyprland/no-follows/flake.lock";
+
+    #[test]
+    fn prune_hyprland_flake_lock() {
+        let mut lock = read_flake_lock(HYPRLAND_LOCK_NO_FOLLOWS.into());
+        substitute_flake_inputs_with_follows(&lock, false);
+        prune_orphan_nodes(&mut lock);
+        assert_json_snapshot!(lock);
+    }
+}
