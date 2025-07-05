@@ -31,3 +31,7 @@ insta = { version = "1.43.1", features = ["json"] }
 lto = true
 strip = "debuginfo"
 panic = "abort"
+
+[profile.dev.package]
+insta.opt-level = 3
+similar.opt-level = 3
