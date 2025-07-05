@@ -350,6 +350,7 @@ mod tests {
                 description => "Hyprland's `flake.lock` after substituting transitive inputs with follows.",
                 input_file => HYPRLAND_LOCK_NO_FOLLOWS,
                 omit_expression => true,
+                snapshot_path => "../tests/snapshots",
             },
             {
                 assert_json_snapshot!(&lock);
