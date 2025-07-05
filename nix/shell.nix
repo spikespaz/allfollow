@@ -2,7 +2,7 @@
 mkShell {
   strictDeps = true;
   inputsFrom = [ pkgs.${packageName} ];
-  packages = [
+  packages = with pkgs; [
     # Derivations in `rust-stable` provide the toolchain,
     # must be listed first to take precedence over nightly.
     (rust-bin.stable.latest.minimal.override {
@@ -14,5 +14,7 @@ mkShell {
       toolchain.minimal.override {
         extensions = [ "rustfmt" "rust-analyzer" ];
       }))
+
+    cargo-insta
   ];
 }
