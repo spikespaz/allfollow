@@ -41,6 +41,16 @@ enum Command {
         #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
+    #[bpaf(command("check"))]
+    Check {
+        /// Do not imitate `inputs.*.follows`, reference node indices instead
+        #[bpaf(long, long("indexed"))]
+        no_follows: bool,
+        /// The path of `flake.lock` to read, or `-` to read from standard input.
+        /// If unspecified, defaults to the current directory.
+        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        lock_file: Input,
+    },
     #[bpaf(command("count"))]
     Count {
         /// Show the data as JSON.
@@ -93,6 +103,7 @@ impl Command {
                     output_opts.overwrite = true;
                 }
             }
+            _ => ()
         };
         args
     }
@@ -130,6 +141,22 @@ fn main() {
             eprintln!();
 
             serialize_to_json_output(&lock, output, overwrite, pretty)
+        }
+        Command::Check {
+            no_follows,
+            lock_file,
+        } => {
+            let current_lock = read_flake_lock(lock_file);
+            let current_hits = FlakeNodeVisits::count_from_index(&current_lock, current_lock.root_index());
+
+            let mut prune_lock = current_lock.clone();
+            substitute_flake_inputs_with_follows(&prune_lock, no_follows);
+            prune_orphan_nodes(&mut prune_lock);
+            let pruned_hits = FlakeNodeVisits::count_from_index(&prune_lock, prune_lock.root_index());
+
+            if pruned_hits.inner != current_hits.inner {
+                panic!("Check failed: Lock file needs prunning. Run `allfollow prune` to fix it.")
+            }
         }
         Command::Count {
             json,
