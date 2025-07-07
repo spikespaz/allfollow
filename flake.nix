@@ -31,30 +31,7 @@
       }) pkgsFor;
 
       checks = lib.mapAttrs (system: pkgs:
-        (lib.mapAttrs' (name: value: {
-          name = "build-${name}";
-          inherit value;
-        }) self.packages.${system}) // {
-          formatting-rust = pkgs.runCommandNoCCLocal "check-rust-formatting" {
-            src = self;
-            nativeBuildInputs = [
-              (pkgs.rust-bin.selectLatestNightlyWith (toolchain:
-                toolchain.minimal.override { extensions = [ "rustfmt" ]; }))
-            ];
-          } ''
-            cd $src
-            cargo fmt --check --message-format short
-            touch $out
-          '';
-          formatting-nix = pkgs.runCommandNoCCLocal "check-nix-formatting" {
-            src = self;
-            nativeBuildInputs = [ pkgs.nixfmt-classic ];
-          } ''
-            cd $src
-            nixfmt --check .
-            touch $out
-          '';
-        }) pkgsFor;
+        pkgs.callPackages ./nix/checks.nix { inherit self lib pkgs; }) pkgsFor;
 
       devShells = lib.mapAttrs (system: pkgs: {
         default = pkgs.callPackage ./nix/shell.nix { inherit packageName; };
