@@ -43,7 +43,7 @@
             ];
           } ''
             cd $src
-            cargo fmt --check
+            cargo fmt --check --message-format short
             touch $out
           '';
           formatting-nix = pkgs.runCommandNoCCLocal "check-nix-formatting" {
