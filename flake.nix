@@ -30,6 +30,12 @@
         ${packageName} = pkgs.${packageName};
       }) pkgsFor;
 
+      checks = eachSystem (system:
+        lib.mapAttrs' (name: value: {
+          name = "build-${name}";
+          inherit value;
+        }) self.packages.${system});
+
       devShells = lib.mapAttrs (system: pkgs: {
         default = pkgs.callPackage ./nix/shell.nix { inherit packageName; };
       }) pkgsFor;
