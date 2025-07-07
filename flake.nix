@@ -46,6 +46,14 @@
             cargo fmt --check
             touch $out
           '';
+          formatting-nix = pkgs.runCommandNoCCLocal "check-nix-formatting" {
+            src = self;
+            nativeBuildInputs = [ pkgs.nixfmt-classic ];
+          } ''
+            cd $src
+            nixfmt --check .
+            touch $out
+          '';
         }) pkgsFor;
 
       devShells = lib.mapAttrs (system: pkgs: {
