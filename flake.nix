@@ -40,7 +40,7 @@
         default = pkgs.callPackage ./nix/shell.nix { inherit packageName; };
       }) pkgsFor;
 
-      formatter =
-        eachSystem (system: nixpkgs.legacyPackages.${system}.nixfmt-classic);
+      formatter = lib.mapAttrs (system: pkgs:
+        pkgs.callPackage ./nix/formatter.nix { inherit packageName; }) pkgsFor;
     };
 }
