@@ -1,4 +1,4 @@
-name: Nix Flake (Checks)
+name: Nix Flake
 
 on:
   pull_request:
@@ -7,6 +7,7 @@ on:
 jobs:
 
   nix-flake-check:
+    name: Evaluate and build all outputs
     runs-on: ubuntu-latest
     steps:
 
@@ -16,5 +17,5 @@ jobs:
       - name: Clone repository
         uses: actions/checkout@v4
 
-      - name: Run flake checks
+      - name: Evaluate and build all outputs
         run: nix flake check --show-trace
