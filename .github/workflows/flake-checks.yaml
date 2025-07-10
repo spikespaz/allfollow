@@ -15,6 +15,7 @@ jobs:
         uses: nixbuild/nix-quick-install-action@v32
         with:
           nix_conf: |
+            pure-eval = true
             allow-import-from-derivation = false
 
       - name: Clone repository
