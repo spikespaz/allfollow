@@ -13,6 +13,9 @@ jobs:
 
       - name: Install Nix
         uses: nixbuild/nix-quick-install-action@v32
+        with:
+          nix_conf: |
+            allow-import-from-derivation = false
 
       - name: Clone repository
         uses: actions/checkout@v4
