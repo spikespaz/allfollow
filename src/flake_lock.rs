@@ -214,7 +214,11 @@ impl LockFile {
     }
 
     pub fn follow_path(&self, path: impl IntoIterator<Item = impl AsRef<str>>) -> Option<String> {
-        path.into_iter().try_fold(self.root.clone(), |index, name| {
+        let mut iter = path.into_iter().peekable();
+        if iter.peek().is_none() {
+            return None;
+        }
+        iter.try_fold(self.root.clone(), |index, name| {
             self.resolve_edge(&*self.get_node(index)?.get_edge(name)?)
         })
     }
