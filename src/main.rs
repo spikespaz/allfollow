@@ -225,10 +225,19 @@ fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed
                 elogln!("-", :yellow "'{edge_name}'", "now follows", :green "'{edge}'", :dimmed "(was '{old}')");
             }
         } else {
-            elogln!(
-                :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
-                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
-            );
+            if let Some(resolved_edge) = lock.resolve_edge(&edge) {
+                elogln!(
+                    :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
+                    :dimmed "(" :dimmed :italic ("'" (resolved_edge) "'") :dimmed ")"
+                );
+            } else {
+                elogln!(
+                    "-",
+                    (:yellow :italic "'{edge_name}'"),
+                    "does not resolve to anything",
+                    :dimmed "(probably because", (:dimmed :italic "follows = \"\"") :dimmed ")"
+                );
+            }
         }
     }
 }
@@ -255,8 +264,9 @@ fn recurse_inputs(lock: &LockFile, index: String, op: &mut impl FnMut(String)) {
     let node = lock.get_node(&index).unwrap();
     op(index);
     for (_, edge) in node.iter_edges() {
-        let index = lock.resolve_edge(&edge).unwrap();
-        recurse_inputs(lock, index, op);
+        if let Some(index) = lock.resolve_edge(&edge) {
+            recurse_inputs(lock, index, op);
+        }
     }
 }
 
