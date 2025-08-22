@@ -195,9 +195,19 @@ impl LockFile {
         self.nodes.get(index.as_ref()).map(RefCell::borrow)
     }
 
-    #[expect(unused)]
     pub fn get_node_mut(&self, index: impl AsRef<str>) -> Option<RefMut<Node>> {
         self.nodes.get(index.as_ref()).map(RefCell::borrow_mut)
+    }
+
+    pub fn get_node_by_edge(&self, edge: &NodeEdge) -> Option<Ref<Node>> {
+        self.resolve_edge(edge)
+            .and_then(|index| self.get_node(index))
+    }
+
+    #[expect(unused)]
+    pub fn get_node_by_edge_mut(&self, edge: &NodeEdge) -> Option<RefMut<Node>> {
+        self.resolve_edge(edge)
+            .and_then(|index| self.get_node_mut(index))
     }
 
     pub fn remove_node(&mut self, index: impl AsRef<str>) -> Option<Node> {
