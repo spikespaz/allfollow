@@ -166,6 +166,10 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
             .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
     };
 
+    lock
+}
+
+fn sanity_check_flake_lock(lock: &LockFile) {
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
         panic!(
             "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}.",
@@ -175,10 +179,6 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
         );
     }
 
-    lock
-}
-
-fn sanity_check_flake_lock(lock: &LockFile) {
     for (index, node) in lock
         .node_indices()
         .map(|index| (index, lock.get_node(index).unwrap()))
