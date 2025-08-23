@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::Serializer;
 
 static EXPECT_ROOT_EXIST: &str = "the root node to exist";
+static MISSED_SANITY_CHECK: &str = "ensure that sanity_check_lock_file is called before this point";
 
 /// Imitate Nix flake input following behavior as a post-process,
 /// so that you can stop manually maintaining tedious connections
@@ -232,20 +233,26 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
 /// verbatim from the root node, most likely retaining a `NodeEdge::Indexed`.
 fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed: bool) {
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
-    for (edge_name, mut edge) in node.iter_edges_mut() {
-        if let Some(root_edge) = root.get_edge(edge_name) {
-            if indexed {
-                let old = std::mem::replace(&mut *edge, (*root_edge).clone());
-                elogln!("-", :yellow "'{edge_name}'", "now references", :italic :purple "'{edge}'", :dimmed "(was '{old}')");
-            } else {
-                let old = std::mem::replace(&mut *edge, NodeEdge::from_iter([edge_name]));
-                elogln!("-", :yellow "'{edge_name}'", "now follows", :green "'{edge}'", :dimmed "(was '{old}')");
-            }
-        } else {
+    for (input_name, mut node_edge) in node.iter_edges_mut() {
+        let Some(root_edge) = root.get_edge(input_name) else {
             elogln!(
-                :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
-                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
+                :bold (:cyan "No suitable replacement for", :yellow "'{input_name}'"),
+                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&node_edge).unwrap()) "'") :dimmed ")"
             );
+            continue;
+        };
+        let Node::Locked(_input) = &*lock.get_node_by_edge(&node_edge).unwrap() else {
+            unreachable!("{}", MISSED_SANITY_CHECK);
+        };
+        let Node::Locked(_root_input) = &*lock.get_node_by_edge(&root_edge).unwrap() else {
+            unreachable!("{}", MISSED_SANITY_CHECK);
+        };
+        if indexed {
+            let old = std::mem::replace(&mut *node_edge, (*root_edge).clone());
+            elogln!("-", :yellow "'{input_name}'", "now references", :italic :purple "'{node_edge}'", :dimmed "(was '{old}')");
+        } else {
+            let old = std::mem::replace(&mut *node_edge, NodeEdge::from_iter([input_name]));
+            elogln!("-", :yellow "'{input_name}'", "now follows", :green "'{node_edge}'", :dimmed "(was '{old}')");
         }
     }
 }
