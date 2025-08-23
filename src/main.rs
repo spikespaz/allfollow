@@ -31,6 +31,11 @@ enum Command {
         /// Do not imitate `inputs.*.follows`, reference node indices instead
         #[bpaf(long, long("indexed"))]
         no_follows: bool,
+        /// Ignore the `ref` of an input by name. This will substitute transitive inputs
+        /// with a top-level input of this name, even if they are on different branches.
+        /// This option can be specified multiple times.
+        #[bpaf(short('R'), long("relax-input"), argument("INPUT"))]
+        relaxed_inputs: Vec<String>,
         /// Do not minify the output JSON
         #[bpaf(short('p'), long)]
         pretty: bool,
@@ -103,6 +108,7 @@ fn main() {
     match Command::from_env() {
         Command::Prune {
             no_follows,
+            relaxed_inputs,
             lock_file,
             pretty,
             output_opts:
@@ -119,7 +125,7 @@ fn main() {
             eprintln!();
             elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
 
-            substitute_flake_inputs_with_follows(&lock, no_follows);
+            substitute_flake_inputs_with_follows(&lock, no_follows, &relaxed_inputs);
             eprintln!();
             prune_orphan_nodes(&mut lock);
 
@@ -210,7 +216,11 @@ fn serialize_to_json_output(value: impl Serialize, output: Output, overwrite: bo
     }
 }
 
-fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
+fn substitute_flake_inputs_with_follows(
+    lock: &LockFile,
+    indexed: bool,
+    relaxed_inputs: &[impl AsRef<str>],
+) {
     elogln!(:bold :bright_magenta "Redirecting inputs to imitate follows behavior.");
 
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
@@ -222,7 +232,7 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
         let input = &*lock
             .get_node(&*input_index)
             .expect("a node to exist with this index");
-        substitute_node_inputs_with_root_inputs(lock, input, indexed);
+        substitute_node_inputs_with_root_inputs(lock, input, indexed, relaxed_inputs);
     }
 }
 
@@ -231,7 +241,12 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
 ///
 /// Otherwise, if `indexed == true`, the each input replacement will be cloned
 /// verbatim from the root node, most likely retaining a `NodeEdge::Indexed`.
-fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed: bool) {
+fn substitute_node_inputs_with_root_inputs(
+    lock: &LockFile,
+    node: &Node,
+    indexed: bool,
+    relaxed_inputs: &[impl AsRef<str>],
+) {
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
     for (input_name, mut node_edge) in node.iter_edges_mut() {
         let Some(root_edge) = root.get_edge(input_name) else {
@@ -247,17 +262,25 @@ fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed
         let Node::Locked(root_input) = &*lock.get_node_by_edge(&root_edge).unwrap() else {
             unreachable!("{}", MISSED_SANITY_CHECK);
         };
-        if input.original != root_input.original {
+
+        let relaxed_replace = relaxed_inputs
+            .iter()
+            .any(|ignore| input_name == ignore.as_ref());
+        let origins_match = input.original.iter().all(|(attr, value)| {
+            (attr == "ref" && relaxed_replace) || (Some(value) == root_input.original.get(attr))
+        });
+        if !origins_match {
             elogln!(
                 :bold (
                     :bright_red "Skipping", :cyan "replacement for", :yellow "'{node_edge}'",
                     :cyan "because", :purple "'{root_edge}'", :cyan "has a different origin."
                 );
-                (,, :yellow "Transitive input:", :blue (input.original));
-                (,, :purple "Top-level input:", :blue (root_input.original))
+                (,, :yellow "Transitive input:", :blue (serde_json::to_value(&input.original).unwrap()));
+                (,, :purple "Top-level input:", :blue (serde_json::to_value(&root_input.original).unwrap()))
             );
             continue;
         }
+
         if indexed {
             let old = std::mem::replace(&mut *node_edge, (*root_edge).clone());
             elogln!("-", :yellow "'{input_name}'", "now references", :italic :purple "'{node_edge}'", :dimmed "(was '{old}')");
@@ -378,7 +401,7 @@ mod tests {
     #[test]
     fn prune_hyprland_flake_lock() {
         let mut lock = read_flake_lock(HYPRLAND_LOCK_NO_FOLLOWS.into());
-        substitute_flake_inputs_with_follows(&lock, false);
+        substitute_flake_inputs_with_follows(&lock, false, &["nixpkgs"]);
         prune_orphan_nodes(&mut lock);
         insta::with_settings!(
             {
