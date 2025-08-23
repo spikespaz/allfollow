@@ -112,6 +112,7 @@ fn main() {
                 },
         } => {
             let mut lock = read_flake_lock(lock_file);
+            sanity_check_flake_lock(&lock);
 
             let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
             eprintln!();
@@ -143,6 +144,7 @@ fn main() {
                 },
         } => {
             let lock = read_flake_lock(lock_file);
+            sanity_check_flake_lock(&lock);
             let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
             if json {
                 serialize_to_json_output(&*node_hits, output, overwrite, pretty)
@@ -174,6 +176,21 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
     }
 
     lock
+}
+
+fn sanity_check_flake_lock(lock: &LockFile) {
+    for (index, node) in lock
+        .node_indices()
+        .map(|index| (index, lock.get_node(index).unwrap()))
+    {
+        if index != "root" && matches!(&*node, Node::Unlocked(_)) {
+            panic!(
+                "This lock file has an unlocked input named '{index}'.\n\
+                This is almost certainly the result of using a buggy version of Nix.\n\
+                Please ensure that Nix is up-to-date and try re-generating the lock file."
+            );
+        }
+    }
 }
 
 fn serialize_to_json_output(value: impl Serialize, output: Output, overwrite: bool, pretty: bool) {
