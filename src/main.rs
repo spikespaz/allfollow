@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_json::Serializer;
 
 static EXPECT_ROOT_EXIST: &str = "the root node to exist";
+static MISSED_SANITY_CHECK: &str = "ensure that sanity_check_lock_file is called before this point";
 
 /// Imitate Nix flake input following behavior as a post-process,
 /// so that you can stop manually maintaining tedious connections
@@ -30,6 +31,11 @@ enum Command {
         /// Do not imitate `inputs.*.follows`, reference node indices instead
         #[bpaf(long, long("indexed"))]
         no_follows: bool,
+        /// Ignore the `ref` of an input by name. This will substitute transitive inputs
+        /// with a top-level input of this name, even if they are on different branches.
+        /// This option can be specified multiple times.
+        #[bpaf(short('R'), long("relax-input"), argument("INPUT"))]
+        relaxed_inputs: Vec<String>,
         /// Do not minify the output JSON
         #[bpaf(short('p'), long)]
         pretty: bool,
@@ -38,7 +44,7 @@ enum Command {
         output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
-        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        #[bpaf(positional("FILE"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
     #[bpaf(command("count"))]
@@ -54,7 +60,7 @@ enum Command {
         output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
-        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        #[bpaf(positional("FILE"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
 }
@@ -102,6 +108,7 @@ fn main() {
     match Command::from_env() {
         Command::Prune {
             no_follows,
+            relaxed_inputs,
             lock_file,
             pretty,
             output_opts:
@@ -112,12 +119,13 @@ fn main() {
                 },
         } => {
             let mut lock = read_flake_lock(lock_file);
+            sanity_check_flake_lock(&lock);
 
             let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
             eprintln!();
             elogln!(:bold :bright_magenta "Flake input nodes' reference counts:"; &node_hits);
 
-            substitute_flake_inputs_with_follows(&lock, no_follows);
+            substitute_flake_inputs_with_follows(&lock, no_follows, &relaxed_inputs);
             eprintln!();
             prune_orphan_nodes(&mut lock);
 
@@ -143,6 +151,7 @@ fn main() {
                 },
         } => {
             let lock = read_flake_lock(lock_file);
+            sanity_check_flake_lock(&lock);
             let node_hits = FlakeNodeVisits::count_from_index(&lock, lock.root_index());
             if json {
                 serialize_to_json_output(&*node_hits, output, overwrite, pretty)
@@ -164,6 +173,10 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
             .unwrap_or_else(|e| panic!("Failed to deserialize the provided flake lock: {e}"))
     };
 
+    lock
+}
+
+fn sanity_check_flake_lock(lock: &LockFile) {
     if lock.version() < MIN_SUPPORTED_LOCK_VERSION && lock.version() > MAX_SUPPORTED_LOCK_VERSION {
         panic!(
             "This program supports lock files between schema versions {} and {} while the flake you have asked to modify is of version {}.",
@@ -173,7 +186,18 @@ fn read_flake_lock(lock_file: Input) -> LockFile {
         );
     }
 
-    lock
+    for (index, node) in lock
+        .node_indices()
+        .map(|index| (index, lock.get_node(index).unwrap()))
+    {
+        if index != "root" && matches!(&*node, Node::Unlocked(_)) {
+            panic!(
+                "This lock file has an unlocked input named '{index}'.\n\
+                This is almost certainly the result of using a buggy version of Nix.\n\
+                Please ensure that Nix is up-to-date and try re-generating the lock file."
+            );
+        }
+    }
 }
 
 fn serialize_to_json_output(value: impl Serialize, output: Output, overwrite: bool, pretty: bool) {
@@ -192,7 +216,11 @@ fn serialize_to_json_output(value: impl Serialize, output: Output, overwrite: bo
     }
 }
 
-fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
+fn substitute_flake_inputs_with_follows(
+    lock: &LockFile,
+    indexed: bool,
+    relaxed_inputs: &[impl AsRef<str>],
+) {
     elogln!(:bold :bright_magenta "Redirecting inputs to imitate follows behavior.");
 
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
@@ -204,7 +232,7 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
         let input = &*lock
             .get_node(&*input_index)
             .expect("a node to exist with this index");
-        substitute_node_inputs_with_root_inputs(lock, input, indexed);
+        substitute_node_inputs_with_root_inputs(lock, input, indexed, relaxed_inputs);
     }
 }
 
@@ -213,22 +241,52 @@ fn substitute_flake_inputs_with_follows(lock: &LockFile, indexed: bool) {
 ///
 /// Otherwise, if `indexed == true`, the each input replacement will be cloned
 /// verbatim from the root node, most likely retaining a `NodeEdge::Indexed`.
-fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed: bool) {
+fn substitute_node_inputs_with_root_inputs(
+    lock: &LockFile,
+    node: &Node,
+    indexed: bool,
+    relaxed_inputs: &[impl AsRef<str>],
+) {
     let root = lock.root().expect(EXPECT_ROOT_EXIST);
-    for (edge_name, mut edge) in node.iter_edges_mut() {
-        if let Some(root_edge) = root.get_edge(edge_name) {
-            if indexed {
-                let old = std::mem::replace(&mut *edge, (*root_edge).clone());
-                elogln!("-", :yellow "'{edge_name}'", "now references", :italic :purple "'{edge}'", :dimmed "(was '{old}')");
-            } else {
-                let old = std::mem::replace(&mut *edge, NodeEdge::from_iter([edge_name]));
-                elogln!("-", :yellow "'{edge_name}'", "now follows", :green "'{edge}'", :dimmed "(was '{old}')");
-            }
-        } else {
+    for (input_name, mut node_edge) in node.iter_edges_mut() {
+        let Some(root_edge) = root.get_edge(input_name) else {
             elogln!(
-                :bold (:cyan "No suitable replacement for", :yellow "'{edge_name}'"),
-                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&edge).unwrap()) "'") :dimmed ")"
+                :bold (:cyan "No suitable replacement for", :yellow "'{input_name}'"),
+                :dimmed "(" :dimmed :italic ("'" (lock.resolve_edge(&node_edge).unwrap()) "'") :dimmed ")"
             );
+            continue;
+        };
+        let Node::Locked(input) = &*lock.get_node_by_edge(&node_edge).unwrap() else {
+            unreachable!("{}", MISSED_SANITY_CHECK);
+        };
+        let Node::Locked(root_input) = &*lock.get_node_by_edge(&root_edge).unwrap() else {
+            unreachable!("{}", MISSED_SANITY_CHECK);
+        };
+
+        let relaxed_replace = relaxed_inputs
+            .iter()
+            .any(|ignore| input_name == ignore.as_ref());
+        let origins_match = input.original.iter().all(|(attr, value)| {
+            (attr == "ref" && relaxed_replace) || (Some(value) == root_input.original.get(attr))
+        });
+        if !origins_match {
+            elogln!(
+                :bold (
+                    :bright_red "Skipping", :cyan "replacement for", :yellow "'{node_edge}'",
+                    :cyan "because", :purple "'{root_edge}'", :cyan "has a different origin."
+                );
+                (,, :yellow "Transitive input:", :blue (serde_json::to_value(&input.original).unwrap()));
+                (,, :purple "Top-level input:", :blue (serde_json::to_value(&root_input.original).unwrap()))
+            );
+            continue;
+        }
+
+        if indexed {
+            let old = std::mem::replace(&mut *node_edge, (*root_edge).clone());
+            elogln!("-", :yellow "'{input_name}'", "now references", :italic :purple "'{node_edge}'", :dimmed "(was '{old}')");
+        } else {
+            let old = std::mem::replace(&mut *node_edge, NodeEdge::from_iter([input_name]));
+            elogln!("-", :yellow "'{input_name}'", "now follows", :green "'{node_edge}'", :dimmed "(was '{old}')");
         }
     }
 }
@@ -343,7 +401,7 @@ mod tests {
     #[test]
     fn prune_hyprland_flake_lock() {
         let mut lock = read_flake_lock(HYPRLAND_LOCK_NO_FOLLOWS.into());
-        substitute_flake_inputs_with_follows(&lock, false);
+        substitute_flake_inputs_with_follows(&lock, false, &["nixpkgs"]);
         prune_orphan_nodes(&mut lock);
         insta::with_settings!(
             {

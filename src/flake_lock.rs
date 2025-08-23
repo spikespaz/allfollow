@@ -36,17 +36,17 @@ pub enum Node {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct LockedNode {
     #[serde(skip_serializing_if = "Clone::clone", default = "default_true")]
-    flake: bool,
+    pub flake: bool,
     #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
-    inputs: IndexMap<String, RefCell<NodeEdge>>,
-    locked: serde_json::Value,
-    original: serde_json::Value,
+    pub inputs: IndexMap<String, RefCell<NodeEdge>>,
+    pub locked: IndexMap<String, serde_json::Value>,
+    pub original: IndexMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct UnlockedNode {
-    inputs: IndexMap<String, RefCell<NodeEdge>>,
+    pub inputs: IndexMap<String, RefCell<NodeEdge>>,
 }
 
 impl NodeEdge {
@@ -195,9 +195,19 @@ impl LockFile {
         self.nodes.get(index.as_ref()).map(RefCell::borrow)
     }
 
-    #[expect(unused)]
     pub fn get_node_mut(&self, index: impl AsRef<str>) -> Option<RefMut<Node>> {
         self.nodes.get(index.as_ref()).map(RefCell::borrow_mut)
+    }
+
+    pub fn get_node_by_edge(&self, edge: &NodeEdge) -> Option<Ref<Node>> {
+        self.resolve_edge(edge)
+            .and_then(|index| self.get_node(index))
+    }
+
+    #[expect(unused)]
+    pub fn get_node_by_edge_mut(&self, edge: &NodeEdge) -> Option<RefMut<Node>> {
+        self.resolve_edge(edge)
+            .and_then(|index| self.get_node_mut(index))
     }
 
     pub fn remove_node(&mut self, index: impl AsRef<str>) -> Option<Node> {
