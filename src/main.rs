@@ -241,12 +241,23 @@ fn substitute_node_inputs_with_root_inputs(lock: &LockFile, node: &Node, indexed
             );
             continue;
         };
-        let Node::Locked(_input) = &*lock.get_node_by_edge(&node_edge).unwrap() else {
+        let Node::Locked(input) = &*lock.get_node_by_edge(&node_edge).unwrap() else {
             unreachable!("{}", MISSED_SANITY_CHECK);
         };
-        let Node::Locked(_root_input) = &*lock.get_node_by_edge(&root_edge).unwrap() else {
+        let Node::Locked(root_input) = &*lock.get_node_by_edge(&root_edge).unwrap() else {
             unreachable!("{}", MISSED_SANITY_CHECK);
         };
+        if input.original != root_input.original {
+            elogln!(
+                :bold (
+                    :bright_red "Skipping", :cyan "replacement for", :yellow "'{node_edge}'",
+                    :cyan "because", :purple "'{root_edge}'", :cyan "has a different origin."
+                );
+                (,, :yellow "Transitive input:", :blue (input.original));
+                (,, :purple "Top-level input:", :blue (root_input.original))
+            );
+            continue;
+        }
         if indexed {
             let old = std::mem::replace(&mut *node_edge, (*root_edge).clone());
             elogln!("-", :yellow "'{input_name}'", "now references", :italic :purple "'{node_edge}'", :dimmed "(was '{old}')");
