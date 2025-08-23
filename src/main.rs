@@ -39,7 +39,7 @@ enum Command {
         output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
-        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        #[bpaf(positional("FILE"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
     #[bpaf(command("count"))]
@@ -55,7 +55,7 @@ enum Command {
         output_opts: OutputOptions,
         /// The path of `flake.lock` to read, or `-` to read from standard input.
         /// If unspecified, defaults to the current directory.
-        #[bpaf(positional("INPUT"), fallback(Input::from("./flake.lock")))]
+        #[bpaf(positional("FILE"), fallback(Input::from("./flake.lock")))]
         lock_file: Input,
     },
 }
