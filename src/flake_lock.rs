@@ -39,8 +39,8 @@ pub struct LockedNode {
     pub flake: bool,
     #[serde(skip_serializing_if = "IndexMap::is_empty", default)]
     pub inputs: IndexMap<String, RefCell<NodeEdge>>,
-    pub locked: serde_json::Value,
-    pub original: serde_json::Value,
+    pub locked: IndexMap<String, serde_json::Value>,
+    pub original: IndexMap<String, serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
