@@ -54,9 +54,11 @@ impl Hash {
     }
 
     pub fn to_string(&self, format: &HashFormat, show_algo: bool) -> String {
-        // TODO: Use `String::with_capacity`, size should be predictable.
-        // XREF: <https://git.lix.systems/lix-project/lix/src/commit/7b6a85982b3442e5371e5c248708fe41ebf2e1c8/lix/libutil/hash.hh>
-        let mut buf = String::new();
+        let mut buf = String::with_capacity(match format {
+            HashFormat::Base64 | HashFormat::Sri => BASE64.encode_len(self.algo.size()),
+            HashFormat::Nix32 => BASE32NIX.encode_len(self.algo.size()),
+            HashFormat::Base16 => HEXLOWER.encode_len(self.algo.size()),
+        });
         self.encode(format, show_algo, &mut buf).unwrap();
         buf
     }
