@@ -1,5 +1,6 @@
 mod cli_args;
 mod flake_lock;
+mod flake_ref;
 mod fmt_colors;
 
 use std::iter::repeat;
