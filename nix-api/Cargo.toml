@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
+strum = { version = "0.27.2", features = ["derive"] }
 url = "2.5.7"
