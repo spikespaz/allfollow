@@ -17,3 +17,15 @@ pub enum HashFormat {
     Base16,
     Sri,
 }
+
+impl HashAlgo {
+    pub const fn size(&self) -> usize {
+        match self {
+            HashAlgo::Blake3 => 32,
+            HashAlgo::Md5 => 16,
+            HashAlgo::Sha1 => 20,
+            HashAlgo::Sha256 => 32,
+            HashAlgo::Sha512 => 64,
+        }
+    }
+}
