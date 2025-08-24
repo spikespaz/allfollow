@@ -171,3 +171,79 @@ impl From<DecodePartial> for ParseError {
         other.error.into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use digest::Digest;
+    use test_case::test_case;
+
+    use super::{Hash, HashAlgo, HashFormat, MAX_HASH_SIZE};
+
+    fn hash_string(s: &str, algo: HashAlgo) -> Hash {
+        let mut bytes = [0; MAX_HASH_SIZE];
+        let buf = &mut bytes[..algo.size()];
+        match algo {
+            HashAlgo::Blake3 => buf.copy_from_slice(blake3::Hasher::digest(s).as_slice()),
+            HashAlgo::Md5 => buf.copy_from_slice(md5::Md5::digest(s).as_slice()),
+            HashAlgo::Sha1 => buf.copy_from_slice(sha1::Sha1::digest(s).as_slice()),
+            HashAlgo::Sha256 => buf.copy_from_slice(sha2::Sha256::digest(s).as_slice()),
+            HashAlgo::Sha512 => buf.copy_from_slice(sha2::Sha512::digest(s).as_slice()),
+        };
+        Hash { algo, bytes }
+    }
+
+    // values taken from: https://tools.ietf.org/html/rfc4634
+    #[test_case(
+        "abc", HashAlgo::Blake3
+        => "blake3:6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85"
+    )]
+    #[test_case(
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", HashAlgo::Blake3
+        => "blake3:c19012cc2aaf0dc3d8e5c45a1b79114d2df42abb2a410bf54be09e891af06ff8"
+    )]
+    // values taken from: https://www.ietf.org/archive/id/draft-aumasson-blake3-00.txt
+    #[test_case(
+        "IETF", HashAlgo::Blake3
+        => "blake3:83a2de1ee6f4e6ab686889248f4ec0cf4cc5709446a682ffd1cbb4d6165181e2"
+    )]
+    // values taken from: https://tools.ietf.org/html/rfc1321
+    #[test_case(
+        "", HashAlgo::Md5
+        => "md5:d41d8cd98f00b204e9800998ecf8427e"
+    )]
+    #[test_case(
+        "abc", HashAlgo::Md5
+        => "md5:900150983cd24fb0d6963f7d28e17f72"
+    )]
+    // values taken from: https://tools.ietf.org/html/rfc3174
+    #[test_case(
+        "abc", HashAlgo::Sha1
+        => "sha1:a9993e364706816aba3e25717850c26c9cd0d89d"
+    )]
+    #[test_case(
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", HashAlgo::Sha1
+        => "sha1:84983e441c3bd26ebaae4aa1f95129e5e54670f1"
+    )]
+    // values taken from: https://tools.ietf.org/html/rfc4634
+    #[test_case(
+        "abc", HashAlgo::Sha256
+        => "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    )]
+    #[test_case(
+        "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", HashAlgo::Sha256
+        => "sha256:248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+    )]
+    #[test_case(
+        "abc", HashAlgo::Sha512
+        => "sha512:ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
+    )]
+    #[test_case(
+        "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu", HashAlgo::Sha512
+        => "sha512:8e959b75dae313da8cf4f72814fc143f8f7779c6eb9f7fa17299aeadb6889018501d289e4900f7e4331b99dec4b5433ac7d329eeb6dd26545e96e55b874be909"
+    )]
+    fn assert_known_hashes(s: &str, algo: HashAlgo) -> &str {
+        Box::leak(Box::new(
+            hash_string(s, algo).to_string(&HashFormat::Base16, true),
+        ))
+    }
+}

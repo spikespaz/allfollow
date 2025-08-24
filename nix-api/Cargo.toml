@@ -9,3 +9,11 @@ data-encoding-macro = "0.1.18"
 serde = { version = "1.0.219", features = ["derive"] }
 strum = { version = "0.27.2", features = ["derive"] }
 url = "2.5.7"
+
+[dev-dependencies]
+blake3 = { version = "1.8.2", features = ["traits-preview"] }
+digest = "0.10.7"
+md-5 = "0.10.6"
+sha1 = "0.10.6"
+sha2 = "0.10.9"
+test-case = "3.3.1"
