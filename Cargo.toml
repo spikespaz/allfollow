@@ -35,3 +35,6 @@ panic = "abort"
 [profile.dev.package]
 insta.opt-level = 3
 similar.opt-level = 3
+
+[workspace]
+members = ["nix-api"]
