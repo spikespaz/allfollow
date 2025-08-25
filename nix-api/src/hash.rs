@@ -193,7 +193,7 @@ mod tests {
     use digest::Digest;
     use test_case::{test_case, test_matrix};
 
-    use super::{Hash, HashAlgo, HashFormat, MAX_HASH_SIZE};
+    use super::{Hash, HashAlgo, HashFormat, MAX_HASH_SIZE, ParseError};
 
     fn hash_string(s: &str, algo: HashAlgo) -> Hash {
         let mut bytes = [0; MAX_HASH_SIZE];
@@ -280,5 +280,107 @@ mod tests {
         };
         eprintln!("decoded = {decoded}");
         assert_eq!(hash, decoded);
+    }
+
+    // MD5 (16 bytes): non-SRI cannot be too short by length-inference; but it
+    // CAN be too long (18). SRI can be too short (15) or too long (18).
+    #[test_case(
+        "md5:AAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Md5, n_bytes: 18 }
+        ; "MD5 non-SRI too long (18 bytes)"
+    )]
+    #[test_case(
+        "md5-AAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Md5, n_bytes: 18 }
+        ; "MD5 SRI too long (18 bytes)"
+    )]
+    #[test_case(
+        "md5-AAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Md5, n_bytes: 15 }
+        ; "MD5 SRI too short (15 bytes)"
+    )]
+    // SHA1 (20 bytes): non-SRI can be too short (19) or too long (21) since
+    // base64 28 chars is ambiguous; SRI likewise.
+    #[test_case(
+        "sha1:AAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Sha1, n_bytes: 19 }
+        ; "SHA1 non-SRI too short (19 bytes)"
+    )]
+    #[test_case(
+        "sha1:AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha1, n_bytes: 21 }
+        ; "SHA1 non-SRI too long (21 bytes)"
+    )]
+    #[test_case(
+        "sha1-AAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Sha1, n_bytes: 19 }
+        ; "SHA1 SRI too short (19 bytes)"
+    )]
+    #[test_case(
+        "sha1-AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha1, n_bytes: 21 }
+        ; "SHA1 SRI too long (21 bytes)"
+    )]
+    // SHA256 (32 bytes): 31 and 33 are both representable at 44 base64 chars.
+    #[test_case(
+        "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Sha256, n_bytes: 31 }
+        ; "SHA256 non-SRI too short (31 bytes)"
+    )]
+    #[test_case(
+        "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha256, n_bytes: 33 }
+        ; "SHA256 non-SRI too long (33 bytes)"
+    )]
+    #[test_case(
+        "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Sha256, n_bytes: 31 }
+        ; "SHA256 SRI too short (31 bytes)"
+    )]
+    #[test_case(
+        "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha256, n_bytes: 33 }
+        ; "SHA256 SRI too long (33 bytes)"
+    )]
+    // BLAKE3 (32 bytes): same sizes as SHA256.
+    #[test_case(
+        "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Blake3, n_bytes: 31 }
+        ; "BLAKE3 non-SRI too short (31 bytes)"
+    )]
+    #[test_case(
+        "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Blake3, n_bytes: 33 }
+        ; "BLAKE3 non-SRI too long (33 bytes)"
+    )]
+    #[test_case(
+        "blake3-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+        => ParseError::InvalidHash { algo: HashAlgo::Blake3, n_bytes: 31 }
+        ; "BLAKE3 SRI too short (31 bytes)"
+    )]
+    #[test_case(
+        "blake3-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Blake3, n_bytes: 33 }
+        ; "BLAKE3 SRI too long (33 bytes)"
+    )]
+    // SHA512 (64 bytes): non-SRI cannot be too short by length-inference; but it
+    // CAN be too long (66). SRI can be too short (63) or too long (66).
+    #[test_case(
+        "sha512:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha512, n_bytes: 66 }
+        ; "SHA512 non-SRI too long (66 bytes)"
+    )]
+    #[test_case(
+        "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha512, n_bytes: 66 }
+        ; "SHA512 SRI too long (66 bytes)"
+    )]
+    #[test_case(
+        "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        => ParseError::InvalidHash { algo: HashAlgo::Sha512, n_bytes: 63 }
+        ; "SHA512 SRI too short (63 bytes)"
+    )]
+    fn invalid_hash(input: &str) -> ParseError {
+        Hash::parse(input).unwrap_err()
     }
 }
