@@ -45,6 +45,8 @@ pub enum ParseError {
     ExpectedPrefix { want: HashAlgo, found: HashAlgo },
     #[error("hash of type `{algo}` with length `{n_chars}` does not match any encoding")]
     WrongLength { algo: HashAlgo, n_chars: usize },
+    #[error("decoded bytes are not a valid `{algo}` hash, expected {} bytes, found {n_bytes}", algo.size())]
+    InvalidHash { algo: HashAlgo, n_bytes: usize },
     #[error("hash has an invalid encoding: {0}")]
     InvalidEncoding(#[from] DecodeError),
 }
@@ -142,10 +144,17 @@ impl Hash {
             Ok(Self { algo, bytes })
         } else if is_sri || hash.len() == BASE64.encode_len(algo.size()) {
             let mut buf = [0; MAX_HASH_SIZE + 2];
-            BASE64.decode_mut(hash, &mut buf[..BASE64.decode_len(hash.len())?])?;
-            let mut bytes = [0; MAX_HASH_SIZE];
-            bytes.copy_from_slice(&buf[..MAX_HASH_SIZE]);
-            Ok(Self { algo, bytes })
+            let wrote = BASE64.decode_mut(hash, &mut buf[..BASE64.decode_len(hash.len())?])?;
+            if wrote == algo.size() {
+                let mut bytes = [0; MAX_HASH_SIZE];
+                bytes[..wrote].copy_from_slice(&buf[..wrote]);
+                Ok(Self { algo, bytes })
+            } else {
+                Err(ParseError::InvalidHash {
+                    algo,
+                    n_bytes: wrote,
+                })
+            }
         } else {
             Err(ParseError::WrongLength {
                 algo,
