@@ -183,7 +183,7 @@ impl From<DecodePartial> for ParseError {
 #[cfg(test)]
 mod tests {
     use digest::Digest;
-    use test_case::test_case;
+    use test_case::{test_case, test_matrix};
 
     use super::{Hash, HashAlgo, HashFormat, MAX_HASH_SIZE};
 
@@ -253,5 +253,24 @@ mod tests {
         Box::leak(Box::new(
             hash_string(s, algo).to_string(&HashFormat::Base16, true),
         ))
+    }
+
+    #[test_matrix(
+        [HashAlgo::Blake3, HashAlgo::Md5, HashAlgo::Sha1, HashAlgo::Sha256, HashAlgo::Sha512],
+        [HashFormat::Base16, HashFormat::Nix32, HashFormat::Base64, HashFormat::Sri],
+        [true, false]
+    )]
+    fn roundtrip(algo: HashAlgo, format: HashFormat, show_algo: bool) {
+        static S: &str = "Rust is okay, but C++ is a blight.";
+        let hash = hash_string(S, algo);
+        eprintln!("encoded = {hash}");
+        let encoded = hash.to_string(&format, show_algo);
+        let decoded = if show_algo {
+            Hash::parse(&encoded).unwrap()
+        } else {
+            Hash::parse_as(&encoded, algo).unwrap()
+        };
+        eprintln!("decoded = {decoded}");
+        assert_eq!(hash, decoded);
     }
 }
