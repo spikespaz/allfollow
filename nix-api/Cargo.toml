@@ -8,6 +8,7 @@ data-encoding = "2.9.0"
 data-encoding-macro = "0.1.18"
 serde = { version = "1.0.219", features = ["derive"] }
 strum = { version = "0.27.2", features = ["derive"] }
+thiserror = "2.0.16"
 url = "2.5.7"
 
 [dev-dependencies]

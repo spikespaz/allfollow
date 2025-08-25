@@ -17,7 +17,7 @@ pub struct Hash {
     bytes: [u8; MAX_HASH_SIZE],
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumString, IntoStaticStr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::Display, EnumString, IntoStaticStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum HashAlgo {
     Blake3,
@@ -35,13 +35,18 @@ pub enum HashFormat {
     Sri,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ParseError {
+    #[error("hash does not specify a type, which is not otherwise known from context")]
     MissingPrefix,
+    #[error("hash has an unknown prefix `{found}`, expected one of {HASH_TYPES_LIST}")]
     UnknownPrefix { found: String },
+    #[error("attempted to parse a hash of type `{want}`, found `{found}` instead")]
     ExpectedPrefix { want: HashAlgo, found: HashAlgo },
+    #[error("hash of type `{algo}` with length `{n_chars}` does not match any encoding")]
     WrongLength { algo: HashAlgo, n_chars: usize },
-    InvalidEncoding(DecodeError),
+    #[error("hash has an invalid encoding: {0}")]
+    InvalidEncoding(#[from] DecodeError),
 }
 
 impl Hash {
@@ -165,12 +170,6 @@ impl HashAlgo {
             HashAlgo::Sha256 => 32,
             HashAlgo::Sha512 => 64,
         }
-    }
-}
-
-impl From<DecodeError> for ParseError {
-    fn from(other: DecodeError) -> Self {
-        Self::InvalidEncoding(other)
     }
 }
 
