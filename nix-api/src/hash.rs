@@ -150,6 +150,12 @@ impl Hash {
     }
 }
 
+impl std::fmt::Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.encode(&HashFormat::Sri, true, f)
+    }
+}
+
 impl HashAlgo {
     pub const fn size(&self) -> usize {
         match self {
