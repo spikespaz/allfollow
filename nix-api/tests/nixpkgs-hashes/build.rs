@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::process::Stdio;
+use std::sync::LazyLock;
 
 use smol::io::{AsyncBufReadExt, BufReader};
 use smol::process::Command;
@@ -102,11 +103,14 @@ async fn collect_hashes_for_many_derivations(
 }
 
 fn collect_hashes_for_derivation(json: &LazyValue) -> DerivationHashes {
-    let mut paths = PointerTree::new();
-    paths.add_path(&["env", "outputHash"]);
-    paths.add_path(&["env", "outputHashAlgo"]);
-    paths.add_path(&["outputs"]);
-    let values = sonic_rs::get_many(json.as_raw_str(), &paths).unwrap();
+    static PATHS: LazyLock<PointerTree> = LazyLock::new(|| {
+        let mut paths = PointerTree::new();
+        paths.add_path(&["env", "outputHash"]);
+        paths.add_path(&["env", "outputHashAlgo"]);
+        paths.add_path(&["outputs"]);
+        paths
+    });
+    let values = sonic_rs::get_many(json.as_raw_str(), &PATHS).unwrap();
     let [env_hash, env_hash_algo, outputs] = values.try_into().unwrap();
 
     let env_hash = env_hash.as_ref().map(|v| v.as_str().unwrap());
@@ -124,10 +128,13 @@ fn collect_hashes_for_derivation(json: &LazyValue) -> DerivationHashes {
     let outputs = outputs
         .map(Result::unwrap)
         .filter_map(|(out_name, out_json)| {
-            let mut paths = PointerTree::new();
-            paths.add_path(&["hash"]);
-            paths.add_path(&["hashAlgo"]);
-            let values = sonic_rs::get_many(out_json.as_raw_str(), &paths).unwrap();
+            static PATHS: LazyLock<PointerTree> = LazyLock::new(|| {
+                let mut paths = PointerTree::new();
+                paths.add_path(&["hash"]);
+                paths.add_path(&["hashAlgo"]);
+                paths
+            });
+            let values = sonic_rs::get_many(out_json.as_raw_str(), &PATHS).unwrap();
             let [hash, algo] = values.try_into().unwrap();
 
             let hash = hash.map(|v| v.as_str().unwrap().to_string())?;
