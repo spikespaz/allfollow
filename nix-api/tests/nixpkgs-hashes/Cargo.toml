@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
+[build-dependencies]
+smol = "2.0.2"
+sonic-rs = "0.5.4"
