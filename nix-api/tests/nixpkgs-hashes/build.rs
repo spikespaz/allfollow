@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
+use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::LazyLock;
 
@@ -48,7 +49,7 @@ fn main() -> std::io::Result<()> {
                     unique_hashes.insert(env_hash);
                 }
                 for (out_name, out_hash) in outputs {
-                    println!("{drv_path}/{out_name} {out_hash:?}");
+                    println!("{drv_path}/{out_name} = {out_hash:?}");
                     unique_hashes.insert(out_hash);
                 }
             }
@@ -65,7 +66,13 @@ impl std::error::Error for ExitStatusError {}
 
 impl std::fmt::Display for ExitStatusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "exited with status: {}", self.0)
+        if let Some(code) = self.0.code() {
+            write!(f, "exited with code: {code}")
+        } else if let Some(signal) = self.0.signal() {
+            write!(f, "killed by signal: {signal}")
+        } else {
+            write!(f, "exited with status: {}", self.0)
+        }
     }
 }
 
@@ -101,24 +108,27 @@ async fn nix_eval_jobs(
         }
     });
 
-    let stream = try_unfold((proc, drv_paths), |(proc, mut drv_paths)| async {
-        if let Some(drv_path) = drv_paths.try_next().await? {
-            Ok(Some((drv_path, (proc, drv_paths))))
+    let check_status = |status: ExitStatus| {
+        if status.success() {
+            Ok(())
         } else {
-            let mut proc = proc;
-            proc.status().await.and_then(|status| {
-                if status.success() {
-                    Ok(None)
-                } else {
-                    use std::io::{Error, ErrorKind};
-                    Err(Error::new(
-                        ErrorKind::UnexpectedEof,
-                        ExitStatusError(status),
-                    ))
-                }
-            })
+            use std::io::Error;
+            Err(Error::other(ExitStatusError(status)))
         }
-    });
+    };
+    let stream = try_unfold(
+        (proc, drv_paths),
+        move |(mut proc, mut drv_paths)| async move {
+            if let Some(status) = proc.try_status()? {
+                check_status(status).map(|_| None)
+            } else if let Some(drv_path) = drv_paths.try_next().await? {
+                Ok(Some((drv_path, (proc, drv_paths))))
+            } else {
+                let status = proc.status().await?;
+                check_status(status).map(|_| None)
+            }
+        },
+    );
 
     Ok(stream)
 }
