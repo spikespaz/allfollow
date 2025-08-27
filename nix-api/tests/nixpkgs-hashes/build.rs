@@ -8,6 +8,7 @@ use sonic_rs::JsonValueTrait;
 
 fn main() -> std::io::Result<()> {
     println!("cargo::rerun-if-changed=npins/sources.json");
+    println!("cargo::rerun-if-changed=nixpkgs-release.nix");
 
     if cfg!(rust_analyzer) {
         println!("cargo::warning=skipping nix-eval-jobs when invoked from rust-analyzer");
