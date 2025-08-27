@@ -16,5 +16,8 @@ mkShell {
       }))
 
     cargo-insta
+
+    npins
+    nix-eval-jobs
   ];
 }
