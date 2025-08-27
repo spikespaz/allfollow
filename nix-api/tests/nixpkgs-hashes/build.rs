@@ -43,6 +43,7 @@ fn main() -> std::io::Result<()> {
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
+            .kill_on_drop(true)
             .spawn()?;
 
         let eval_stdout = eval_drvs.stdout.take().unwrap();
@@ -87,6 +88,7 @@ async fn collect_hashes_for_many_derivations(
         .args(drvs)
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
+        .kill_on_drop(true)
         .output()
         .await?;
     if !output.status.success() {
