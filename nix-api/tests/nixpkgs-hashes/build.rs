@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
-use std::process::Stdio;
+use std::process::{ExitStatus, Stdio};
 use std::sync::LazyLock;
 
 use smol::io::{AsyncBufReadExt, BufReader};
 use smol::process::Command;
-use smol::stream::StreamExt;
+use smol::stream::{Stream, StreamExt, try_unfold};
 use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -29,35 +29,18 @@ fn main() -> std::io::Result<()> {
     }
 
     smol::block_on(async {
-        let mut eval_drvs = Command::new("nix-eval-jobs")
-            .arg("--workers")
-            .arg(std::env::var_os("NUM_JOBS").unwrap())
-            .arg("--force-recurse")
-            .arg("--expr")
-            .arg({
-                let mut expr = OsString::new();
-                expr.push("import ");
-                expr.push(std::fs::canonicalize("./nixpkgs-release.nix").unwrap());
-                expr
-            })
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .spawn()?;
-
-        let eval_stdout = eval_drvs.stdout.take().unwrap();
-        let mut json_lines = BufReader::new(eval_stdout).lines();
+        let drvs_expr = {
+            let mut expr = OsString::new();
+            expr.push("import ");
+            expr.push(std::fs::canonicalize("./nixpkgs-release.nix").unwrap());
+            expr
+        };
+        let eval_drvs = nix_eval_jobs(true, drvs_expr).await?;
+        smol::pin!(eval_drvs);
 
         let mut unique_hashes = HashSet::new();
 
-        while let Some(json_line) = json_lines.try_next().await? {
-            let Ok(drv_path) = sonic_rs::get_from_str(&json_line, ["drvPath"]) else {
-                assert!(sonic_rs::get_from_str(&json_line, ["error"]).is_ok());
-                continue;
-            };
-            let drv_path = drv_path.as_str().unwrap();
-
+        while let Some(drv_path) = eval_drvs.try_next().await? {
             let drv_hashes = collect_hashes_for_many_derivations(&[drv_path]).await?;
             for (drv_path, DerivationHashes { env, outputs }) in drv_hashes {
                 if let Some(env_hash) = env {
@@ -71,13 +54,73 @@ fn main() -> std::io::Result<()> {
             }
         }
 
-        let status = eval_drvs.status().await?;
-        if !status.success() {
-            println!("cargo::warning=nix-eval-jobs exited with {status}");
-        }
-
         Ok(())
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ExitStatusError(ExitStatus);
+
+impl std::error::Error for ExitStatusError {}
+
+impl std::fmt::Display for ExitStatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "exited with status: {}", self.0)
+    }
+}
+
+async fn nix_eval_jobs(
+    force_recurse: bool,
+    expr: impl AsRef<OsStr>,
+) -> std::io::Result<impl Stream<Item = std::io::Result<String>>> {
+    let mut cmd = Command::new("nix-eval-jobs");
+    if force_recurse {
+        cmd.arg("--force-recurse");
+    }
+    cmd.arg("--expr").arg(expr.as_ref());
+    cmd.arg("--workers")
+        .arg(std::env::var_os("NUM_JOBS").unwrap())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+
+    let mut proc = cmd.spawn()?;
+    let stdout = proc.stdout.take().unwrap();
+    let drv_paths = BufReader::new(stdout).lines().filter_map(|res| {
+        if let Ok(line) = res {
+            if let Ok(drv_path) = sonic_rs::get_from_str(&line, ["drvPath"]) {
+                let drv_path = drv_path.as_str().unwrap().to_string();
+                Some(Ok(drv_path))
+            } else {
+                assert!(sonic_rs::get_from_str(&line, ["error"]).is_ok());
+                None
+            }
+        } else {
+            Some(res)
+        }
+    });
+
+    let stream = try_unfold((proc, drv_paths), |(proc, mut drv_paths)| async {
+        if let Some(drv_path) = drv_paths.try_next().await? {
+            Ok(Some((drv_path, (proc, drv_paths))))
+        } else {
+            let mut proc = proc;
+            proc.status().await.and_then(|status| {
+                if status.success() {
+                    Ok(None)
+                } else {
+                    use std::io::{Error, ErrorKind};
+                    Err(Error::new(
+                        ErrorKind::UnexpectedEof,
+                        ExitStatusError(status),
+                    ))
+                }
+            })
+        }
+    });
+
+    Ok(stream)
 }
 
 async fn collect_hashes_for_many_derivations(
