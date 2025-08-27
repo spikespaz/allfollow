@@ -9,6 +9,11 @@ use sonic_rs::JsonValueTrait;
 fn main() -> std::io::Result<()> {
     println!("cargo::rerun-if-changed=npins/sources.json");
 
+    if cfg!(rust_analyzer) {
+        println!("cargo::warning=skipping nix-eval-jobs when invoked from rust-analyzer");
+        return Ok(());
+    }
+
     smol::block_on(async {
         let mut eval_drvs = Command::new("nix-eval-jobs")
             .arg("--workers")

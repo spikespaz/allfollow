@@ -8,3 +8,7 @@ edition = "2024"
 [build-dependencies]
 smol = "2.0.2"
 sonic-rs = "0.5.4"
+
+[lints.rust.unexpected_cfgs]
+level = "allow"
+check-cfg = ["cfg(rust_analyzer)"]
