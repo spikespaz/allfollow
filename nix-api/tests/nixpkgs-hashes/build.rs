@@ -5,7 +5,7 @@ use std::process::Stdio;
 use smol::io::{AsyncBufReadExt, BufReader};
 use smol::process::Command;
 use smol::stream::StreamExt;
-use sonic_rs::JsonValueTrait;
+use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Hash {
@@ -93,50 +93,58 @@ async fn collect_hashes_for_many_derivations(
     }
     let drv_hashes = sonic_rs::to_object_iter(output.stdout.as_slice()).map(|res| {
         let (drv_path, drv_json) = res.unwrap();
-        let env_hash = drv_json
-            .pointer(&["env", "outputHash"])
-            .map(|v| v.as_str().unwrap().to_string());
-        let env_hash_algo = drv_json
-            .pointer(&["env", "outputHashAlgo"])
-            .and_then(|v| as_nullable_str(&v).unwrap().map(str::to_string));
-        let out_hashes = drv_json
-            .get("outputs")
-            .unwrap()
-            .into_object_iter()
-            .unwrap()
-            .filter_map(|res| {
-                let (out_name, out_json) = res.unwrap();
-                out_json.get("hash").map(|value| {
-                    let out_hash = Hash {
-                        hash: value.as_str().unwrap().to_string(),
-                        algo: Some(
-                            out_json
-                                .get("hashAlgo")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .to_string(),
-                        ),
-                    };
-                    (out_name.to_string(), out_hash)
-                })
-            });
-        let all_hashes = DerivationHashes {
-            env: env_hash.map(|hash| Hash {
-                hash,
-                algo: env_hash_algo,
-            }),
-            outputs: out_hashes.collect(),
-        };
-        (drv_path.to_string(), all_hashes)
+        (
+            drv_path.to_string(),
+            collect_hashes_for_derivation(&drv_json),
+        )
     });
     Ok(drv_hashes.collect())
 }
 
-fn as_nullable_str(v: &impl JsonValueTrait) -> Result<Option<&str>, ()> {
-    if v.is_null() {
-        Ok(None)
-    } else {
-        v.as_str().map(Some).ok_or(())
+fn collect_hashes_for_derivation(json: &LazyValue) -> DerivationHashes {
+    let mut paths = PointerTree::new();
+    paths.add_path(&["env", "outputHash"]);
+    paths.add_path(&["env", "outputHashAlgo"]);
+    paths.add_path(&["outputs"]);
+    let values = sonic_rs::get_many(json.as_raw_str(), &paths).unwrap();
+    let [env_hash, env_hash_algo, outputs] = values.try_into().unwrap();
+
+    let env_hash = env_hash.as_ref().map(|v| v.as_str().unwrap());
+    let env_hash_algo = env_hash_algo.as_ref().and_then(|v| match v {
+        v if v.is_null() => None,
+        v => Some(v.as_str().unwrap()),
+    });
+    let outputs = outputs.and_then(LazyValue::into_object_iter).unwrap();
+
+    let env = env_hash.map(|hash| Hash {
+        hash: hash.to_string(),
+        algo: env_hash_algo.map(str::to_string),
+    });
+
+    let outputs = outputs
+        .map(Result::unwrap)
+        .filter_map(|(out_name, out_json)| {
+            let mut paths = PointerTree::new();
+            paths.add_path(&["hash"]);
+            paths.add_path(&["hashAlgo"]);
+            let values = sonic_rs::get_many(out_json.as_raw_str(), &paths).unwrap();
+            let [hash, algo] = values.try_into().unwrap();
+
+            let hash = hash.map(|v| v.as_str().unwrap().to_string())?;
+            let algo = algo.map(|v| v.as_str().unwrap().to_string()).unwrap();
+
+            Some((out_name.to_string(), Hash::with_algo(hash, algo)))
+        })
+        .collect();
+
+    DerivationHashes { env, outputs }
+}
+
+impl Hash {
+    fn with_algo(hash: impl Into<String>, algo: impl Into<String>) -> Self {
+        Self {
+            hash: hash.into(),
+            algo: Some(algo.into()),
+        }
     }
 }
