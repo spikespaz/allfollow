@@ -3,12 +3,13 @@ use std::ffi::{OsStr, OsString};
 use std::os::unix::process::ExitStatusExt;
 use std::process::{ExitStatus, Stdio};
 use std::sync::LazyLock;
+use std::time::{Duration, Instant};
 
-use smol::channel;
 use smol::future::try_zip;
 use smol::io::{AsyncBufReadExt, BufReader};
 use smol::process::Command;
 use smol::stream::{Stream, StreamExt, try_unfold};
+use smol::{LocalExecutor, channel};
 use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
 const STORE_PATHS_PER_QUERY: usize = 64;
@@ -24,6 +25,17 @@ struct DerivationHashes {
     pub outputs: Vec<(String, Hash)>,
 }
 
+enum Statistic {
+    Progress { drvs: usize, hashes: usize },
+}
+
+struct TimingBucket<const SCALE: u64> {
+    last_total: u64,
+    last_update: Instant,
+    since_start: Duration,
+    since_mark: Duration,
+}
+
 fn main() -> std::io::Result<()> {
     println!("cargo::rerun-if-changed=npins/sources.json");
     println!("cargo::rerun-if-changed=nixpkgs-release.nix");
@@ -33,7 +45,11 @@ fn main() -> std::io::Result<()> {
         return Ok(());
     }
 
+    println!("STORE_PATHS_PER_QUERY = {STORE_PATHS_PER_QUERY}");
+
+    let ex = LocalExecutor::new();
     let (chunks_tx, chunks_rx) = channel::unbounded();
+    let (stats_tx, stats_rx) = channel::bounded(1);
 
     let dispatcher = async {
         let drvs_expr = {
@@ -66,21 +82,63 @@ fn main() -> std::io::Result<()> {
         let mut unique = HashSet::new();
         while let Ok(res) = chunks_rx.recv().await {
             let drv_hashes = res?;
-            for (drv_path, DerivationHashes { env, outputs }) in drv_hashes {
+            let mut hash_count = 0;
+            let drv_count = drv_hashes.len();
+
+            for (_drv_path, DerivationHashes { env, outputs }) in drv_hashes {
                 if let Some(env_hash) = env {
-                    println!("{drv_path} = {env_hash:?}");
+                    // println!("{drv_path} = {env_hash:?}");
                     unique.insert(env_hash);
+                    hash_count += 1;
                 }
-                for (out_name, out_hash) in outputs {
-                    println!("{drv_path}/{out_name} = {out_hash:?}");
+                for (_out_name, out_hash) in outputs {
+                    // println!("{drv_path}/{out_name} = {out_hash:?}");
                     unique.insert(out_hash);
+                    hash_count += 1;
                 }
             }
+
+            stats_tx
+                .send(Statistic::Progress {
+                    hashes: hash_count,
+                    drvs: drv_count,
+                })
+                .await
+                .unwrap();
         }
+
         Ok::<_, std::io::Error>(unique)
     };
 
-    let (_, _hashes) = smol::block_on(try_zip(dispatcher, receiver))?;
+    let statistics = async move {
+        #[expect(unused)]
+        let mut total_drvs = 0;
+        let mut total_hashes = 0;
+        let start = Instant::now();
+
+        let mut time_1k = TimingBucket::<1_000>::new(start);
+        let mut time_10k = TimingBucket::<10_000>::new(start);
+        let mut time_100k = TimingBucket::<100_000>::new(start);
+
+        while let Ok(msg) = stats_rx.recv().await {
+            match msg {
+                Statistic::Progress { drvs, hashes } => {
+                    total_hashes += hashes as u64;
+                    total_drvs += drvs as u64;
+                    let now = Instant::now();
+
+                    time_1k.update(now, total_hashes);
+                    time_10k.update(now, total_hashes);
+                    time_100k.update(now, total_hashes);
+
+                    println!("[perf (s/hash)] {time_1k}, {time_10k}, {time_100k}");
+                }
+            }
+        }
+    };
+
+    ex.spawn(statistics).detach();
+    let (_, _hashes) = smol::block_on(ex.run(try_zip(dispatcher, receiver)))?;
     Ok(())
 }
 
@@ -232,6 +290,71 @@ impl Hash {
         Self {
             hash: hash.into(),
             algo: Some(algo.into()),
+        }
+    }
+}
+
+impl<const SCALE: u64> TimingBucket<SCALE> {
+    fn new(start: Instant) -> Self {
+        debug_assert!(SCALE > 0 && SCALE % 1000 == 0);
+        Self {
+            last_total: 0,
+            last_update: start,
+            since_start: Duration::ZERO,
+            since_mark: Duration::ZERO,
+        }
+    }
+
+    pub fn marks_passed(&self) -> u64 {
+        self.last_total / SCALE
+    }
+
+    pub fn update(&mut self, now: Instant, curr_total: u64) {
+        assert!(curr_total >= self.last_total);
+        assert!(now >= self.last_update);
+
+        let delta = curr_total - self.last_total;
+        let elapsed = now - self.last_update;
+        self.last_update = now;
+        self.since_start += elapsed;
+
+        let last_mark = self.marks_passed();
+        self.last_total = curr_total;
+        let curr_mark = self.marks_passed();
+
+        if curr_mark > last_mark {
+            let progress = curr_total % SCALE;
+            let complete = delta - progress;
+
+            let elapsed_ns = elapsed.as_nanos();
+            let attributed = elapsed_ns * (complete as u128) / (delta as u128);
+            let since_mark = elapsed_ns - attributed;
+
+            self.since_mark = Duration::from_nanos(since_mark as u64);
+        } else {
+            self.since_mark += elapsed;
+        }
+    }
+
+    pub fn average_rate(&self) -> Option<Duration> {
+        let marks = self.marks_passed();
+        if marks == 0 {
+            None
+        } else {
+            let time_to_mark = self.since_start - self.since_mark;
+            Some(time_to_mark / marks as u32)
+        }
+    }
+}
+
+impl<const SCALE: u64> std::fmt::Display for TimingBucket<SCALE> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let thou = SCALE / 1000;
+        if let Some(rate) = self.average_rate() {
+            let rate = rate.as_secs_f64();
+            write!(f, "{rate:.2}s/{thou}k")
+        } else {
+            write!(f, "--/{thou}k")
         }
     }
 }
