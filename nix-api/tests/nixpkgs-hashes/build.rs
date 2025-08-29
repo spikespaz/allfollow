@@ -5,6 +5,7 @@ use std::process::{ExitStatus, Stdio};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use humantime::{FormattedDuration, format_duration};
 use smol::future::try_zip;
 use smol::io::{AsyncBufReadExt, BufReader};
 use smol::lock::Semaphore;
@@ -150,7 +151,8 @@ fn main() -> std::io::Result<()> {
                     time_100k.update(now, total_hashes);
 
                     println!(
-                        "[progress] drvs: {total_drvs}, hashes: {total_hashes} (unique: {total_unique})",
+                        "[progress] drvs: {total_drvs}, hashes: {total_hashes} (unique: {total_unique}), elapsed: {}",
+                        DisplayElapsed::from(now - start),
                     );
                     println!(
                         "[perf (s/hash)] {time_1k:>width_0$}, {time_10k:>width_1$}, {time_100k:>#width_2$}",
@@ -398,5 +400,25 @@ impl<const SCALE: u64> std::fmt::Display for TimingBucket<SCALE> {
             (None, None) => write!(f, "--/{thou}k"),
             (None, Some(rate)) => write!(f, "{rate:.precision$}s/{thou}k"),
         }
+    }
+}
+
+struct DisplayElapsed(FormattedDuration);
+
+impl From<Duration> for DisplayElapsed {
+    fn from(other: Duration) -> Self {
+        Self(format_duration({
+            if other >= Duration::from_secs(60) {
+                Duration::from_secs(other.as_secs())
+            } else {
+                Duration::from_millis(other.as_millis() as u64)
+            }
+        }))
+    }
+}
+
+impl std::fmt::Display for DisplayElapsed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }

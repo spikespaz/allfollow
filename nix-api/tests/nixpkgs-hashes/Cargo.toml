@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 
 [build-dependencies]
+humantime = "2.2.0"
 smol = "2.0.2"
 sonic-rs = "0.5.4"
 
