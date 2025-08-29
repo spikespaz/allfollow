@@ -141,7 +141,7 @@ fn main() -> std::io::Result<()> {
                     time_10k.update(now, total_hashes);
                     time_100k.update(now, total_hashes);
 
-                    println!("[perf (s/hash)] {time_1k}, {time_10k}, {time_100k}");
+                    println!("[perf (s/hash)] {time_1k}, {time_10k}, {time_100k:#}");
                 }
             }
         }
@@ -355,12 +355,27 @@ impl<const SCALE: u64> TimingBucket<SCALE> {
             Some(time_to_mark / marks as u32)
         }
     }
+
+    pub fn average_rate_predictive(&self) -> Option<Duration> {
+        if self.last_total == 0 {
+            None
+        } else {
+            let elapsed = self.since_start.as_nanos();
+            let rate = elapsed * SCALE as u128 / self.last_total as u128;
+            Some(Duration::from_nanos(rate as u64))
+        }
+    }
 }
 
 impl<const SCALE: u64> std::fmt::Display for TimingBucket<SCALE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let thou = SCALE / 1000;
-        if let Some(rate) = self.average_rate() {
+        let rate = if f.alternate() {
+            self.average_rate_predictive()
+        } else {
+            self.average_rate()
+        };
+        if let Some(rate) = rate {
             let rate = rate.as_secs_f64();
             write!(f, "{rate:.2}s/{thou}k")
         } else {
