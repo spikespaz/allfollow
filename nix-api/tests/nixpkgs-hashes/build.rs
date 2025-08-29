@@ -28,7 +28,11 @@ struct DerivationHashes {
 }
 
 enum Statistic {
-    Progress { drvs: usize, hashes: usize },
+    Progress {
+        drvs: usize,
+        hashes: usize,
+        total_unique: usize,
+    },
 }
 
 struct TimingBucket<const SCALE: u64> {
@@ -110,8 +114,9 @@ fn main() -> std::io::Result<()> {
 
             stats_tx
                 .send(Statistic::Progress {
-                    hashes: hash_count,
                     drvs: drv_count,
+                    hashes: hash_count,
+                    total_unique: unique.len(),
                 })
                 .await
                 .unwrap();
@@ -121,7 +126,6 @@ fn main() -> std::io::Result<()> {
     };
 
     let statistics = async move {
-        #[expect(unused)]
         let mut total_drvs = 0;
         let mut total_hashes = 0;
         let start = Instant::now();
@@ -132,7 +136,11 @@ fn main() -> std::io::Result<()> {
 
         while let Ok(msg) = stats_rx.recv().await {
             match msg {
-                Statistic::Progress { drvs, hashes } => {
+                Statistic::Progress {
+                    drvs,
+                    hashes,
+                    total_unique,
+                } => {
                     total_hashes += hashes as u64;
                     total_drvs += drvs as u64;
                     let now = Instant::now();
@@ -141,6 +149,9 @@ fn main() -> std::io::Result<()> {
                     time_10k.update(now, total_hashes);
                     time_100k.update(now, total_hashes);
 
+                    println!(
+                        "[progress] drvs: {total_drvs}, hashes: {total_hashes} (unique: {total_unique})",
+                    );
                     println!(
                         "[perf (s/hash)] {time_1k:>width_0$}, {time_10k:>width_1$}, {time_100k:>#width_2$}",
                         width_0 = 9,
