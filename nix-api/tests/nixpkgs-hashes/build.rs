@@ -12,7 +12,7 @@ use smol::stream::{Stream, StreamExt, try_unfold};
 use smol::{LocalExecutor, channel};
 use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
-const STORE_PATHS_PER_QUERY: usize = 64;
+const STORE_PATHS_PER_QUERY: usize = 8;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Hash {
