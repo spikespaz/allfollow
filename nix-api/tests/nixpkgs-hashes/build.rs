@@ -141,7 +141,12 @@ fn main() -> std::io::Result<()> {
                     time_10k.update(now, total_hashes);
                     time_100k.update(now, total_hashes);
 
-                    println!("[perf (s/hash)] {time_1k}, {time_10k}, {time_100k:#}");
+                    println!(
+                        "[perf (s/hash)] {time_1k:>width_0$}, {time_10k:>width_1$}, {time_100k:>#width_2$}",
+                        width_0 = 9,
+                        width_1 = 10,
+                        width_2 = 12,
+                    );
                 }
             }
         }
@@ -371,15 +376,16 @@ impl<const SCALE: u64> std::fmt::Display for TimingBucket<SCALE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let thou = SCALE / 1000;
         let rate = if f.alternate() {
-            self.average_rate_predictive()
+            self.average_rate_predictive().map(|d| d.as_secs_f64())
         } else {
-            self.average_rate()
+            self.average_rate().map(|d| d.as_secs_f64())
         };
-        if let Some(rate) = rate {
-            let rate = rate.as_secs_f64();
-            write!(f, "{rate:.2}s/{thou}k")
-        } else {
-            write!(f, "--/{thou}k")
+        let precision = f.precision().unwrap_or(2);
+        match (f.width(), rate) {
+            (Some(_), None) => f.pad(&format!("--/{thou}k")),
+            (Some(_), Some(rate)) => f.pad(&format!("{rate:.precision$}s/{thou}k")),
+            (None, None) => write!(f, "--/{thou}k"),
+            (None, Some(rate)) => write!(f, "{rate:.precision$}s/{thou}k"),
         }
     }
 }
