@@ -14,7 +14,7 @@ use smol::{LocalExecutor, channel};
 use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
 const STORE_PATHS_PER_QUERY: usize = 8;
-const MAX_CONCURRENT_STORE_QUERIES: usize = 4;
+const MAX_CONCURRENT_STORE_QUERIES: usize = 8;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 struct Hash {
