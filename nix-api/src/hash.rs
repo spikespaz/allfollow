@@ -69,6 +69,10 @@ impl Hash {
         &self.bytes[..self.algo.size()]
     }
 
+    pub fn format(&self) -> Option<HashFormat> {
+        self.format
+    }
+
     pub fn to_string(&self, format: &HashFormat, show_algo: bool) -> String {
         let mut buf = String::with_capacity(match format {
             HashFormat::Base64 | HashFormat::Sri => BASE64.encode_len(self.algo.size()),
