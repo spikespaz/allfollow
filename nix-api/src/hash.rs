@@ -15,6 +15,7 @@ pub const BASE32NIX: Encoding = new_encoding! {
 pub struct Hash {
     algo: HashAlgo,
     bytes: [u8; MAX_HASH_SIZE],
+    format: Option<HashFormat>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::Display, EnumString, IntoStaticStr)]
@@ -52,6 +53,14 @@ pub enum ParseError {
 }
 
 impl Hash {
+    pub(crate) fn _new(algo: HashAlgo, bytes: [u8; MAX_HASH_SIZE], format: HashFormat) -> Self {
+        Self {
+            algo,
+            bytes,
+            format: Some(format),
+        }
+    }
+
     pub fn algorithm(&self) -> HashAlgo {
         self.algo
     }
@@ -137,18 +146,23 @@ impl Hash {
         if !is_sri && hash.len() == HEXLOWER.encode_len(algo.size()) {
             let mut bytes = [0; MAX_HASH_SIZE];
             HEXLOWER.decode_mut(hash, &mut bytes[..algo.size()])?;
-            Ok(Self { algo, bytes })
+            Ok(Self::_new(algo, bytes, HashFormat::Base16))
         } else if !is_sri && hash.len() == BASE32NIX.encode_len(algo.size()) {
             let mut bytes = [0; MAX_HASH_SIZE];
             BASE32NIX.decode_mut(hash, &mut bytes[..algo.size()])?;
-            Ok(Self { algo, bytes })
+            Ok(Self::_new(algo, bytes, HashFormat::Nix32))
         } else if is_sri || hash.len() == BASE64.encode_len(algo.size()) {
             let mut buf = [0; MAX_HASH_SIZE + 2];
             let wrote = BASE64.decode_mut(hash, &mut buf[..BASE64.decode_len(hash.len())?])?;
             if wrote == algo.size() {
                 let mut bytes = [0; MAX_HASH_SIZE];
                 bytes[..wrote].copy_from_slice(&buf[..wrote]);
-                Ok(Self { algo, bytes })
+                let format = if is_sri {
+                    HashFormat::Sri
+                } else {
+                    HashFormat::Base64
+                };
+                Ok(Self::_new(algo, bytes, format))
             } else {
                 Err(ParseError::InvalidHash {
                     algo,
@@ -205,7 +219,11 @@ mod tests {
             HashAlgo::Sha256 => buf.copy_from_slice(sha2::Sha256::digest(s).as_slice()),
             HashAlgo::Sha512 => buf.copy_from_slice(sha2::Sha512::digest(s).as_slice()),
         };
-        Hash { algo, bytes }
+        Hash {
+            algo,
+            bytes,
+            format: None,
+        }
     }
 
     // values taken from: https://tools.ietf.org/html/rfc4634
