@@ -16,6 +16,7 @@ pub struct Hash {
     algo: HashAlgo,
     bytes: [u8; MAX_HASH_SIZE],
     format: Option<HashFormat>,
+    show_algo: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::Display, EnumString, IntoStaticStr)]
@@ -58,6 +59,7 @@ impl Hash {
             algo,
             bytes,
             format: Some(format),
+            show_algo: false,
         }
     }
 
@@ -120,7 +122,12 @@ impl Hash {
             }
             (Some(algo), Some(_)) => Ok(algo),
         }?;
-        Self::decode(hash, algo, is_sri)
+        Self::decode(hash, algo, is_sri).map(|mut decoded| {
+            if algo_prefix.is_some() {
+                decoded.show_algo = true;
+            }
+            decoded
+        })
     }
 
     pub(crate) fn parse_prefix(input: &str) -> Result<(Option<HashAlgo>, bool, &str), ParseError> {
@@ -227,6 +234,7 @@ mod tests {
             algo,
             bytes,
             format: None,
+            show_algo: false,
         }
     }
 
