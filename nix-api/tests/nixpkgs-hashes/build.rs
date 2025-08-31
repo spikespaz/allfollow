@@ -6,18 +6,21 @@ use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use humantime::{FormattedDuration, format_duration};
+use smol::fs::File;
 use smol::future::try_zip;
-use smol::io::{AsyncBufReadExt, BufReader};
+use smol::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use smol::lock::Semaphore;
 use smol::process::Command;
 use smol::stream::{Stream, StreamExt, try_unfold};
 use smol::{LocalExecutor, channel};
 use sonic_rs::{JsonValueTrait, LazyValue, PointerTree};
 
+static GENERATE_OUTPUT_FILE_PATH: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/src/nixpkgs_hashes.csv");
 const STORE_PATHS_PER_QUERY: usize = 8;
 const MAX_CONCURRENT_STORE_QUERIES: usize = 8;
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Hash {
     pub hash: String,
     pub algo: Option<String>,
@@ -94,7 +97,19 @@ fn main() -> std::io::Result<()> {
     };
 
     let receiver = async {
+        let output_file = File::create(GENERATE_OUTPUT_FILE_PATH).await?;
+        let mut writer = BufWriter::new(output_file);
         let mut unique = HashSet::new();
+
+        let mut write_unique_hash = async |unique: &mut HashSet<_>, hash: &Hash| {
+            if unique.insert(hash.clone()) {
+                let csv_record = hash.to_csv_record().to_string();
+                writer.write_all(csv_record.as_bytes()).await?;
+                writer.write_all(b"\n").await?;
+            }
+            Ok::<_, std::io::Error>(())
+        };
+
         while let Ok(res) = chunks_rx.recv().await {
             let drv_hashes = res?;
             let mut hash_count = 0;
@@ -102,13 +117,11 @@ fn main() -> std::io::Result<()> {
 
             for (_drv_path, DerivationHashes { env, outputs }) in drv_hashes {
                 if let Some(env_hash) = env {
-                    // println!("{drv_path} = {env_hash:?}");
-                    unique.insert(env_hash);
+                    write_unique_hash(&mut unique, &env_hash).await?;
                     hash_count += 1;
                 }
                 for (_out_name, out_hash) in outputs {
-                    // println!("{drv_path}/{out_name} = {out_hash:?}");
-                    unique.insert(out_hash);
+                    write_unique_hash(&mut unique, &out_hash).await?;
                     hash_count += 1;
                 }
             }
@@ -123,6 +136,7 @@ fn main() -> std::io::Result<()> {
                 .unwrap();
         }
 
+        writer.close().await?;
         Ok::<_, std::io::Error>(unique)
     };
 
@@ -168,6 +182,24 @@ fn main() -> std::io::Result<()> {
     ex.spawn(statistics).detach();
     let (_, _hashes) = smol::block_on(ex.run(try_zip(dispatcher, receiver)))?;
     Ok(())
+}
+
+impl Hash {
+    fn to_csv_record(&self) -> impl std::fmt::Display {
+        struct __Display<'a>(&'a Hash);
+        impl<'a> std::fmt::Display for __Display<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, r#""{}""#, self.0.hash)?;
+                write!(f, ", ")?;
+                match &self.0.algo {
+                    Some(algo) => write!(f, r#""{algo}""#)?,
+                    None => write!(f, "null")?,
+                }
+                Ok(())
+            }
+        }
+        __Display(self)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
